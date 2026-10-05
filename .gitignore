@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.env.local
+*.log
+
+.npm-cache/
+test-results/
+playwright-report/
+
+# Environment files and generated screenshots
+.env
+.env.*
+!.env.example
+artifacts/
