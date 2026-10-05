@@ -1,7 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
+import { zipSync, strToU8 } from "fflate";
 import ReactMarkdown from "react-markdown";
 import {
   ArrowUpFromLine,
+  Download,
   BookOpen,
   Check,
   ChevronDown,
@@ -25,12 +27,16 @@ export function SkillPackageEditor({
   onChange,
   source,
   kind = "skills",
+  downloadable = false,
+  downloadPrefix = "planner",
   setError,
 }: {
   files: Record<string, string>;
   onChange: (f: Record<string, string>) => void;
   source: string;
   kind?: "skills" | "workers";
+  downloadable?: boolean;
+  downloadPrefix?: string;
   setError: (e: string) => void;
 }) {
   const isRegistry = kind === "workers";
@@ -187,6 +193,58 @@ export function SkillPackageEditor({
             <span>{paths.length} files</span>
           </div>
           <div className="file-tools">
+            {downloadable && (
+              <button
+                title="Download folder as ZIP"
+                aria-label="Download folder as ZIP"
+                disabled={!paths.length}
+                onClick={() => {
+                  try {
+                    const entries = Object.fromEntries(
+                      Object.entries(files).map(([name, content]) => {
+                        if (!validatePath(name) || name.includes(":"))
+                          throw Error("Cannot download an unsafe file path.");
+                        return [root + "/" + name, strToU8(content)];
+                      }),
+                    );
+                    for (const folder of folders) {
+                      if (
+                        !validatePath(folder + "/placeholder.md") ||
+                        folder.includes(":")
+                      )
+                        throw Error("Cannot download an unsafe folder path.");
+                      entries[root + "/" + folder + "/"] = new Uint8Array();
+                    }
+                    const bytes = zipSync(entries);
+                    const url = URL.createObjectURL(
+                      new Blob([new Uint8Array(bytes)], {
+                        type: "application/zip",
+                      }),
+                    );
+                    const link = document.createElement("a");
+                    link.href = url;
+                    link.download =
+                      downloadPrefix.replace(/[^a-zA-Z0-9_-]/g, "-") +
+                      "-" +
+                      root +
+                      ".zip";
+                    document.body.appendChild(link);
+                    link.click();
+                    link.remove();
+                    setTimeout(() => URL.revokeObjectURL(url), 1000);
+                    setError("");
+                  } catch (error) {
+                    setError(
+                      error instanceof Error
+                        ? error.message
+                        : "Folder download failed.",
+                    );
+                  }
+                }}
+              >
+                <Download size={17} />
+              </button>
+            )}
             <button
               title="Add file"
               aria-label="Add file"

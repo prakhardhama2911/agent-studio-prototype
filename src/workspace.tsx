@@ -227,6 +227,8 @@ export function Workspace({
         )}
         {tab === "Skills" && (
           <SkillPackageEditor
+            downloadable
+            downloadPrefix={agent.id}
             files={agent.files}
             onChange={(files) => updateAgent({ files })}
             source={agent.skillOrigin || agent.origin}

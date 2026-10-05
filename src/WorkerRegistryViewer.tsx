@@ -16,6 +16,7 @@ export function WorkerRegistryViewer({
   return (
     <SkillPackageEditor
       kind="workers"
+      downloadable
       files={files}
       onChange={onChange}
       setError={setError}
