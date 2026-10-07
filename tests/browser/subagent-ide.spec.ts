@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./static-fixture";
 for (const name of ["PQA Analysis", "Ad-hoc Dataset Analysis", "Category: Market Segments"]) {
   test(name + " uses the shared Skills IDE", async ({ page }) => {
     await page.goto("/");

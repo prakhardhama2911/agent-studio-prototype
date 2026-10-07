@@ -4,9 +4,11 @@ import { Info } from "lucide-react";
 export function ModelSharingInfo({
   name,
   agents,
+  packageScoped = false,
 }: {
   name: string;
   agents: string[];
+  packageScoped?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLSpanElement>(null);
@@ -52,6 +54,9 @@ export function ModelSharingInfo({
               ? "This model is shared by:"
               : "This model is used by:"}
           </span>
+          {packageScoped && (
+            <span>Settings changes apply only to this agent’s package.</span>
+          )}
           <span className="model-sharing-agents">
             {agents.map((agent) => (
               <span key={agent}>{agent}</span>

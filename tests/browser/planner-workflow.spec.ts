@@ -1,4 +1,4 @@
-﻿import { test, expect } from "@playwright/test";
+﻿import { test, expect } from "./static-fixture";
 const openPlanner = async (page: any) => {
   await page.goto("/");
   await page.getByRole("button", { name: /02 planner/i }).click();
@@ -7,6 +7,8 @@ const create = async (page: any) => {
   await page.getByRole("button", { name: "Create draft", exact: true }).click();
 };
 const publish = async (page: any) => {
+  await page.getByRole("button", { name: /Review changes/ }).click();
+  await page.getByRole("button", { name: "Close review", exact: true }).click();
   await page
     .getByRole("button", { name: "Publish changes", exact: true })
     .click();
@@ -164,5 +166,46 @@ test("invalid publication retains draft and storage failures do not claim succes
   await expect(page.getByRole("alert")).toContainText("Storage is full");
   await expect(
     page.getByRole("button", { name: "Save draft", exact: true }),
+  ).toBeVisible();
+});
+
+test("review progress survives closing and resuming, and edits require another review", async ({
+  page,
+}) => {
+  await openPlanner(page);
+  await create(page);
+  const source = page.locator(".skills-text-input");
+  await source.fill((await source.inputValue()) + "\nReview progress test");
+  const current = page.locator('.planner-stepper [aria-current="step"]');
+  const publishButton = page.getByRole("button", {
+    name: "Publish changes",
+    exact: true,
+  });
+  await expect(current).toContainText("Draft");
+  await expect(publishButton).toBeDisabled();
+  await page.getByRole("button", { name: /Review changes/ }).click();
+  await page.getByRole("button", { name: "Close review", exact: true }).click();
+  await expect(current).toContainText("Review");
+  await expect(publishButton).toBeEnabled();
+  await page.reload();
+  await page.getByRole("button", { name: /02 planner/i }).click();
+  await page.getByRole("button", { name: "Resume draft", exact: true }).click();
+  await expect(current).toContainText("Review");
+  await publishButton.click();
+  await expect(current).toContainText("Publish");
+  await page
+    .getByRole("dialog")
+    .last()
+    .getByRole("button", { name: "Cancel", exact: true })
+    .click();
+  await expect(current).toContainText("Review");
+  await source.fill((await source.inputValue()) + "\nAnother edit");
+  await expect(current).toContainText("Draft");
+  await expect(publishButton).toBeDisabled();
+  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await expect(current).toContainText("Draft");
+  await publish(page);
+  await expect(
+    page.getByText("Active in development", { exact: true }),
   ).toBeVisible();
 });

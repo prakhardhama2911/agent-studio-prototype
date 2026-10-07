@@ -11,6 +11,7 @@
     "test:browser": "playwright test"
   },
   "dependencies": {
+    "diff": "^9.0.0",
     "fflate": "^0.8.3",
     "lucide-react": "^0.562.0",
     "react": "^18.3.1",

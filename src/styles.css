@@ -3254,3 +3254,18 @@ button:disabled {
 .planner-tour-skip { font-size:11px; color:#8d94a9; background:transparent; border:0; padding:8px 0; }
 .planner-tour-card .planner-tour-error { color:#ab4242; font-size:12px; }
 @media(max-width:600px) { .planner-tour-welcome { margin:12px 16px; flex-wrap:wrap; } .planner-tour-welcome > div { flex-basis:80%; } .planner-guide-links { width:100%; justify-content:space-between; } }
+
+.planner-diff-summary { display:flex; gap:14px; padding:8px 18px 14px; font-size:11px; color:#8590a7; }
+.diff-add-count { color:#287b4b; }
+.diff-remove-count { color:#b34949; }
+.planner-diff-source > .diff-gap { background:#f6f7fa; }
+.planner-diff-source > div > .diff-sign { width:20px; padding:0 3px; text-align:center; color:inherit; }
+.planner-diff-source .added .diff-sign { color:#287b4b; }
+.planner-diff-source .removed .diff-sign { color:#b34949; }
+.planner-diff-source .added mark { background:#acf0bf; color:inherit; }
+.planner-diff-source .removed mark { background:#ffc4c4; color:inherit; }
+.planner-diff-source .diff-eof { font-size:10px; color:#9198a9; margin-left:15px; }
+.planner-stepper .completed { color: #32866e; }
+.planner-stepper .completed b { background: #e9f6ef; border-color: #c7e5d6; }
+.workflow-interactions { display: contents; }
+.workflow-interactions[disabled] { cursor: progress; }

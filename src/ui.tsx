@@ -29,6 +29,7 @@ export function Dialog({
       className={`${wide ? "dialog wide" : "dialog"} ${className}`}
       onCancel={(e) => {
         e.preventDefault();
+        e.stopPropagation();
         onClose();
       }}
     >

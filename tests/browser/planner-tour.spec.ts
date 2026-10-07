@@ -1,4 +1,4 @@
-﻿import { test, expect } from "@playwright/test";
+﻿import { test, expect } from "./static-fixture";
 const openPlanner = async (page: any) => {
   await page.goto("/");
   await page.getByRole("button", { name: /02 planner/i }).click();
@@ -17,9 +17,11 @@ test("guided tour restores initial view without persisting its temporary draft",
   );
   expect(
     await page.evaluate(() =>
-      localStorage.getItem("alchemy-studio:planner-workflow:v1"),
+      localStorage.getItem(
+        "alchemy-studio:agent-workflow:v2:alchemy-studio%3Av1%3Asample:planner",
+      ),
     ),
-  ).toBeNull();
+  ).not.toBeNull();
   await tour.getByRole("button", { name: "Next", exact: true }).click();
   await page.screenshot({ path: "artifacts/planner-tour-create.png" });
   await tour.getByRole("button", { name: "Create draft & continue" }).click();
@@ -41,13 +43,25 @@ test("guided tour restores initial view without persisting its temporary draft",
   await expect(tour).toHaveCount(0);
   expect(
     await page.evaluate(() =>
-      localStorage.getItem("alchemy-studio:planner-workflow:v1"),
+      localStorage.getItem(
+        "alchemy-studio:agent-workflow:v2:alchemy-studio%3Av1%3Asample:planner",
+      ),
     ),
-  ).toBeNull();
+  ).not.toBeNull();
   await expect(
     page.getByRole("button", { name: "Create draft", exact: true }),
   ).toBeVisible();
   await expect(page.locator(".planner-stepper")).toHaveCount(0);
+  expect(
+    await page.evaluate(
+      () =>
+        JSON.parse(
+          localStorage.getItem(
+            "alchemy-studio:agent-workflow:v2:alchemy-studio%3Av1%3Asample:planner",
+          )!,
+        ).drafts,
+    ),
+  ).toEqual({});
   await page.reload();
   await page.getByRole("button", { name: /02 planner/i }).click();
   await expect(
@@ -81,9 +95,11 @@ test("tour is dismissible and stays within a mobile viewport", async ({
   await tour.getByRole("button", { name: "Skip tour" }).click();
   expect(
     await page.evaluate(() =>
-      localStorage.getItem("alchemy-studio:planner-workflow:v1"),
+      localStorage.getItem(
+        "alchemy-studio:agent-workflow:v2:alchemy-studio%3Av1%3Asample:planner",
+      ),
     ),
-  ).toBeNull();
+  ).not.toBeNull();
 });
 
 for (const exit of ["skip", "close", "escape"]) {
@@ -114,9 +130,11 @@ for (const exit of ["skip", "close", "escape"]) {
       ).toHaveAttribute("aria-pressed", "true");
       expect(
         await page.evaluate(() =>
-          localStorage.getItem("alchemy-studio:planner-workflow:v1"),
+          localStorage.getItem(
+            "alchemy-studio:agent-workflow:v2:alchemy-studio%3Av1%3Asample:planner",
+          ),
         ),
-      ).toBeNull();
+      ).not.toBeNull();
     },
   );
 }
@@ -131,7 +149,9 @@ test("tour preserves real draft, unsaved edits, and selected tab", async ({
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
   await page.getByRole("tab", { name: /Prompts/ }).click();
   const before = await page.evaluate(() =>
-    localStorage.getItem("alchemy-studio:planner-workflow:v1"),
+    localStorage.getItem(
+      "alchemy-studio:agent-workflow:v2:alchemy-studio%3Av1%3Asample:planner",
+    ),
   );
   await page.getByLabel("Prompt content").fill("Unsaved prompt work");
   await page.getByRole("button", { name: "Draft guide", exact: true }).click();
@@ -141,7 +161,9 @@ test("tour preserves real draft, unsaved edits, and selected tab", async ({
   await page.waitForTimeout(900);
   expect(
     await page.evaluate(() =>
-      localStorage.getItem("alchemy-studio:planner-workflow:v1"),
+      localStorage.getItem(
+        "alchemy-studio:agent-workflow:v2:alchemy-studio%3Av1%3Asample:planner",
+      ),
     ),
   ).toBe(before);
   await tour.getByRole("button", { name: "Close draft guide" }).click();

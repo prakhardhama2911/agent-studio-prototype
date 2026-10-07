@@ -39,8 +39,9 @@ import {
   saveDraft,
 } from "./lib/core.mjs";
 import { readApi } from "./lib/api";
-import { PlannerWorkspace } from "./PlannerWorkspace";
-import { Workspace } from "./workspace";
+import { AgentWorkspace } from "./AgentWorkspace";
+import { loadActiveSummaries, packageSummary } from "./agentWorkflowService";
+import type { ActiveSummary } from "./agentWorkflowService";
 import { Badge, Button, Dialog } from "./ui";
 import "./styles.css";
 function download(data: StudioData) {
@@ -59,6 +60,31 @@ function App() {
   const [data, setData] = useState<StudioData>(freshSeed);
   const [base, setBase] = useState<StudioData>(freshSeed);
   const [storageKey, setStorageKey] = useState(sampleKey);
+  const [activeSummaries, setActiveSummaries] = useState<
+    Record<string, ActiveSummary>
+  >({});
+  useEffect(() => {
+    let active = true;
+    const refresh = () => {
+      void loadActiveSummaries(
+        storageKey,
+        data.agents.map((a) => a.id),
+      )
+        .then((value) => {
+          if (active) setActiveSummaries(value);
+        })
+        .catch(() => {});
+    };
+    setActiveSummaries({});
+    refresh();
+    window.addEventListener("agent-workflow-change", refresh);
+    window.addEventListener("storage", refresh);
+    return () => {
+      active = false;
+      window.removeEventListener("agent-workflow-change", refresh);
+      window.removeEventListener("storage", refresh);
+    };
+  }, [storageKey, data.agents]);
   const [mode, setMode] = useState<"sample" | "live">("sample");
   const [token, setToken] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
@@ -434,11 +460,15 @@ function App() {
                       </span>
                       <span>
                         <FileText size={13} />
-                        {a.prompts.length} prompts
+                        {activeSummaries[a.id]?.prompts ??
+                          a.prompts.length}{" "}
+                        prompts
                       </span>
                       <span>
                         <Boxes size={13} />
-                        {a.modelIds.length} models
+                        {activeSummaries[a.id]?.models ??
+                          a.modelIds.length}{" "}
+                        models
                       </span>
                     </div>
                     <div className="card-footer">
@@ -579,24 +609,21 @@ function App() {
           e.target.value = "";
         }}
       />
-      {selectedAgent &&
-        (selectedAgent.role === "planner" ? (
-          <PlannerWorkspace
-            key={selectedAgent.id}
-            data={data}
-            agent={selectedAgent}
-            onClose={() => setSelected(null)}
-          />
-        ) : (
-          <Workspace
-            key={selectedAgent.id}
-            data={data}
-            agentId={selectedAgent.id}
-            source={base}
-            onClose={() => setSelected(null)}
-            onSave={commit}
-          />
-        ))}
+      {selectedAgent && selectedAgent.role !== "coordinator" && (
+        <AgentWorkspace
+          key={storageKey + selectedAgent.id}
+          data={data}
+          agent={selectedAgent}
+          catalogId={storageKey}
+          onActiveChange={(id, content) =>
+            setActiveSummaries((previous) => ({
+              ...previous,
+              [id]: packageSummary(content),
+            }))
+          }
+          onClose={() => setSelected(null)}
+        />
+      )}
       {connect && (
         <Connection
           busy={busy}

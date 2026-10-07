@@ -10,6 +10,7 @@
     "allowJs": true,
     "resolveJsonModule": true,
     "esModuleInterop": true,
+    "allowImportingTsExtensions": true,
     "noEmit": true
   },
   "include": ["src", "vite.config.ts"]

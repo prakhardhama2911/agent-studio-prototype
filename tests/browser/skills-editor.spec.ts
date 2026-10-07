@@ -1,4 +1,4 @@
-﻿import { test, expect } from "@playwright/test";
+﻿import { test, expect } from "./static-fixture";
 
 test("planner Skills has the registry-style IDE and retains authoring controls", async ({
   page,
@@ -63,7 +63,7 @@ test("sub-agent files remain editable across add, import, preview, save and dele
 }) => {
   await page.goto("/");
   await page.getByRole("button", { name: /01 PQA Analysis/ }).click();
-  await page.getByRole("button", { name: "Edit mode", exact: true }).click();
+  await page.getByRole("button", { name: "Create draft", exact: true }).click();
   await page.getByRole("button", { name: "Add folder", exact: true }).click();
   await page
     .getByRole("textbox", { name: "New folder", exact: true })
@@ -105,7 +105,7 @@ test("sub-agent files remain editable across add, import, preview, save and dele
   await expect(
     page.getByRole("textbox", { name: "Edit imported.md", exact: true }),
   ).toHaveValue(/Review evidence/);
-  await page.getByRole("button", { name: "Save changes", exact: true }).click();
+  await page.getByRole("button", { name: "Save draft", exact: true }).click();
   await page.screenshot({ path: "artifacts/subagent-skills-ide.png" });
   page.once("dialog", (dialog) => dialog.accept());
   await page
