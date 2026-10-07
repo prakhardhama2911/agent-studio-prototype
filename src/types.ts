@@ -61,12 +61,16 @@ export interface Agent {
   files: Record<string, string>;
   workerFiles?: Record<string, string>;
   skillOrigin?: Origin;
+  publishedConfiguration?: string;
+  publishedAt?: string;
   prompts: Prompt[];
   modelIds: string[];
   origin: Origin;
   source?: string;
 }
 export interface Group {
+  publishedConfiguration?: string;
+  publishedAt?: string;
   id: string;
   name: string;
   description: string;

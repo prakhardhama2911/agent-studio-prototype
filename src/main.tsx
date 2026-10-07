@@ -39,6 +39,7 @@ import {
   saveDraft,
 } from "./lib/core.mjs";
 import { readApi } from "./lib/api";
+import { PlannerWorkspace } from "./PlannerWorkspace";
 import { Workspace } from "./workspace";
 import { Badge, Button, Dialog } from "./ui";
 import "./styles.css";
@@ -578,17 +579,24 @@ function App() {
           e.target.value = "";
         }}
       />
-      {selectedAgent && (
-        <Workspace
-          key={selectedAgent.id}
-          data={data}
-          agentId={selectedAgent.id}
-          source={base}
-          onClose={() => setSelected(null)}
-          onSave={commit}
-          onExport={download}
-        />
-      )}
+      {selectedAgent &&
+        (selectedAgent.role === "planner" ? (
+          <PlannerWorkspace
+            key={selectedAgent.id}
+            data={data}
+            agent={selectedAgent}
+            onClose={() => setSelected(null)}
+          />
+        ) : (
+          <Workspace
+            key={selectedAgent.id}
+            data={data}
+            agentId={selectedAgent.id}
+            source={base}
+            onClose={() => setSelected(null)}
+            onSave={commit}
+          />
+        ))}
       {connect && (
         <Connection
           busy={busy}
@@ -652,14 +660,28 @@ function App() {
         <ManageGroup
           group={data.groups.find((g) => g.id === manage)!}
           onClose={() => setManage(null)}
-          onSave={(name, description) => {
-            safeCommit({
+          onSave={(name, description, publish) => {
+            commit({
               ...data,
               groups: data.groups.map((g) =>
-                g.id === manage ? { ...g, name, description } : g,
+                g.id === manage
+                  ? {
+                      ...g,
+                      name,
+                      description,
+                      ...(publish
+                        ? {
+                            publishedConfiguration: JSON.stringify({
+                              name,
+                              description,
+                            }),
+                            publishedAt: new Date().toISOString(),
+                          }
+                        : {}),
+                    }
+                  : g,
               ),
             });
-            setManage(null);
           }}
         />
       )}
@@ -846,20 +868,64 @@ function ManageGroup({
 }: {
   group: Group;
   onClose: () => void;
-  onSave: (n: string, d: string) => void;
+  onSave: (n: string, d: string, publish: boolean) => void;
 }) {
-  const [name, setName] = useState(group.name),
-    [description, setDescription] = useState(group.description);
+  const [name, setName] = useState(group.name);
+  const [description, setDescription] = useState(group.description);
+  const [editing, setEditing] = useState(false);
+  const [error, setError] = useState("");
+  const [status, setStatus] = useState("");
+  const dirty = name !== group.name || description !== group.description;
+  const publish = (publishing: boolean) => {
+    try {
+      onSave(name.trim(), description.trim(), publishing);
+      setName(name.trim());
+      setDescription(description.trim());
+      setError("");
+      setStatus(publishing ? "Changes published" : "Changes saved");
+      if (publishing) setEditing(false);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+  const close = () => {
+    if (!dirty || confirm("Discard unsaved group changes?")) onClose();
+  };
   return (
-    <Dialog title="Manage group" eyebrow="PRESENTATION GROUP" onClose={onClose}>
+    <Dialog title="Manage group" eyebrow="GROUP CONFIGURATION" onClose={close}>
+      <div className="group-publish">
+        <Button
+          primary
+          disabled={
+            !name.trim() ||
+            JSON.stringify({
+              name: name.trim(),
+              description: description.trim(),
+            }) === group.publishedConfiguration
+          }
+          onClick={() => publish(true)}
+        >
+          Publish changes
+        </Button>
+      </div>
       <div className="dialog-body">
+        {error && (
+          <div className="alert" role="alert">
+            {error}
+          </div>
+        )}
         <label>
           Name
-          <input value={name} onChange={(e) => setName(e.target.value)} />
+          <input
+            readOnly={!editing}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
         </label>
         <label>
           Description
           <textarea
+            readOnly={!editing}
             rows={3}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
@@ -869,13 +935,32 @@ function ManageGroup({
           Groups organize sub-agents. Skills, prompts, and model settings belong
           to the executable agents inside them.
         </div>
+        {status && <p role="status">{status}</p>}
       </div>
       <footer className="dialog-footer">
-        <Button onClick={onClose}>Cancel</Button>
+        <Button
+          className={editing ? "edit-mode-active" : ""}
+          onClick={() => setEditing(!editing)}
+        >
+          {editing ? "Exit edit mode" : "Edit mode"}
+        </Button>
+        <Button
+          disabled={!dirty}
+          onClick={() => {
+            if (confirm("Discard changes since the last save?")) {
+              setName(group.name);
+              setDescription(group.description);
+              setError("");
+              setStatus("Changes discarded");
+            }
+          }}
+        >
+          Discard changes
+        </Button>
         <Button
           primary
-          disabled={!name.trim()}
-          onClick={() => onSave(name.trim(), description.trim())}
+          disabled={!editing || !dirty || !name.trim()}
+          onClick={() => publish(false)}
         >
           Save changes
         </Button>

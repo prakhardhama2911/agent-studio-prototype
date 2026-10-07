@@ -21,6 +21,7 @@ import {
   X,
 } from "lucide-react";
 import { validateFile, validatePath } from "./lib/core.mjs";
+import { useEditMode } from "./EditModeContext";
 import { SkillCodeEditor } from "./SkillCodeEditor";
 export function SkillPackageEditor({
   files,
@@ -39,6 +40,7 @@ export function SkillPackageEditor({
   downloadPrefix?: string;
   setError: (e: string) => void;
 }) {
+  const editing = useEditMode();
   const isRegistry = kind === "workers";
   const root = isRegistry ? "worker-registry" : "skills";
   const [path, setPath] = useState(Object.keys(files)[0] || "");
@@ -246,6 +248,7 @@ export function SkillPackageEditor({
               </button>
             )}
             <button
+              disabled={!editing}
               title="Add file"
               aria-label="Add file"
               onClick={() => {
@@ -256,6 +259,7 @@ export function SkillPackageEditor({
               <FilePlus2 size={17} />
             </button>
             <button
+              disabled={!editing}
               title="Add folder"
               aria-label="Add folder"
               onClick={() => {
@@ -266,6 +270,7 @@ export function SkillPackageEditor({
               <FolderPlus size={17} />
             </button>
             <button
+              disabled={!editing}
               title="Import files"
               aria-label="Import files"
               onClick={() => fileInput.current?.click()}
@@ -273,6 +278,7 @@ export function SkillPackageEditor({
               <ArrowUpFromLine size={17} />
             </button>
             <button
+              disabled={!editing}
               title="Import folder"
               aria-label="Import folder"
               onClick={() => folderInput.current?.click()}
@@ -289,7 +295,7 @@ export function SkillPackageEditor({
               onChange={(e) => setFilter(e.target.value)}
             />
           </div>
-          {adding && (
+          {adding && editing && (
             <div className="add-path">
               <label>
                 {adding === "folder" ? "New folder" : "New file"}
@@ -461,6 +467,7 @@ export function SkillPackageEditor({
               )}
               {path && (
                 <button
+                  disabled={!editing}
                   aria-label="Delete selected file"
                   title="Delete selected file"
                   onClick={() => {

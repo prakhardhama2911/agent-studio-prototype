@@ -19,6 +19,8 @@ import {
   Plus,
   RotateCcw,
   Save,
+  Pencil,
+  Upload,
   Search,
   Settings2,
   ShieldCheck,
@@ -26,6 +28,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import { EditModeContext, useEditMode } from "./EditModeContext";
 import { Badge, Button, Dialog } from "./ui";
 import { SkillPackageEditor } from "./SkillPackageEditor";
 import { ModelSharingInfo } from "./ModelSharingInfo";
@@ -47,17 +50,16 @@ export function Workspace({
   agentId,
   onClose,
   onSave,
-  onExport,
 }: {
   data: StudioData;
   source: StudioData;
   agentId: string;
   onClose: () => void;
   onSave: (d: StudioData) => void;
-  onExport: (d: StudioData) => void;
 }) {
   const [draft, setDraft] = useState(() => structuredClone(data));
   const [saved, setSaved] = useState(() => JSON.stringify(data));
+  const [editing, setEditing] = useState(false);
   const [tab, setTab] = useState("Skills");
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
@@ -82,7 +84,7 @@ export function Workspace({
     if (!dirty || confirm("Discard unsaved changes and close this workspace?"))
       onClose();
   };
-  const save = () => {
+  const save = (publish = false) => {
     try {
       for (const a of draft.agents) {
         for (const [p, c] of Object.entries({
@@ -125,18 +127,46 @@ export function Workspace({
       const next = {
         ...draft,
         agents: draft.agents.map((a) =>
-          a.id === agentId ? { ...a, origin: "Local draft" as const } : a,
+          a.id === agentId
+            ? {
+                ...a,
+                origin: "Local draft" as const,
+                ...(publish
+                  ? {
+                      publishedConfiguration: JSON.stringify({
+                        files: a.files,
+                        workerFiles: a.workerFiles,
+                        prompts: a.prompts,
+                        modelIds: a.modelIds,
+                        models: draft.models.filter((m) =>
+                          a.modelIds.includes(m.id),
+                        ),
+                      }),
+                      publishedAt: new Date().toISOString(),
+                    }
+                  : {}),
+              }
+            : a,
         ),
       };
       onSave(next);
       setDraft(next);
       setSaved(JSON.stringify(next));
       setError("");
-      setStatus("Changes saved");
+      setStatus(publish ? "Changes published" : "Changes saved");
+      if (publish) setEditing(false);
     } catch (e) {
       setError((e as Error).message);
     }
   };
+  const configuration = JSON.stringify({
+    files: agent.files,
+    workerFiles: agent.workerFiles,
+    prompts: agent.prompts,
+    modelIds: agent.modelIds,
+    models: draft.models.filter((m) => agent.modelIds.includes(m.id)),
+  });
+  const canPublish = configuration !== agent.publishedConfiguration;
   const count = (name: string) =>
     name === "Skills"
       ? Object.keys(agent.files).length
@@ -175,7 +205,13 @@ export function Workspace({
           </div>
           <p>{agent.description}</p>
         </div>
-        <span className="workspace-id">{agent.id}</span>
+        <div className="workspace-publish">
+          <Button primary onClick={() => save(true)} disabled={!canPublish}>
+            <Upload size={15} />
+            Publish changes
+          </Button>
+          <span className="workspace-id">{agent.id}</span>
+        </div>
       </div>
       <div className="tabs" role="tablist" aria-label="Agent configuration">
         {visibleTabs.map(({ name, icon: Icon }) => (
@@ -214,57 +250,66 @@ export function Workspace({
           </button>
         ))}
       </div>
-      <div
-        className="workspace-body"
-        role="tabpanel"
-        id="workspace-panel"
-        aria-labelledby={`tab-${tab.replaceAll(" ", "-")}`}
-      >
-        {error && (
-          <div className="alert" role="alert">
-            {error}
-          </div>
-        )}
-        {tab === "Skills" && (
-          <SkillPackageEditor
-            downloadable
-            downloadPrefix={agent.id}
-            files={agent.files}
-            onChange={(files) => updateAgent({ files })}
-            source={agent.skillOrigin || agent.origin}
-            setError={setError}
-          />
-        )}
-        {tab === "Prompts" && (
-          <PromptEditor
-            prompts={agent.prompts}
-            onChange={(prompts) => updateAgent({ prompts })}
-            role={agent.role}
-            source={agent.source}
-          />
-        )}
-        {tab === "Worker Definitions" && agent.role === "planner" && (
-          <WorkerRegistryViewer
-            files={agent.workerFiles ?? defaultWorkerFiles}
-            onChange={(workerFiles) => updateAgent({ workerFiles })}
-            setError={setError}
-          />
-        )}
-        {tab === "Models" && (
-          <Models
-            agent={agent}
-            data={draft}
-            onChange={(models) => setDraft((d) => ({ ...d, models }))}
-            onAssign={(modelIds) => updateAgent({ modelIds })}
-          />
-        )}
-      </div>
+      <EditModeContext.Provider value={editing}>
+        <div
+          className="workspace-body"
+          role="tabpanel"
+          id="workspace-panel"
+          aria-labelledby={`tab-${tab.replaceAll(" ", "-")}`}
+        >
+          {error && (
+            <div className="alert" role="alert">
+              {error}
+            </div>
+          )}
+          {tab === "Skills" && (
+            <SkillPackageEditor
+              downloadable
+              downloadPrefix={agent.id}
+              files={agent.files}
+              onChange={(files) => updateAgent({ files })}
+              source={agent.skillOrigin || agent.origin}
+              setError={setError}
+            />
+          )}
+          {tab === "Prompts" && (
+            <PromptEditor
+              prompts={agent.prompts}
+              onChange={(prompts) => updateAgent({ prompts })}
+              role={agent.role}
+              source={agent.source}
+            />
+          )}
+          {tab === "Worker Definitions" && agent.role === "planner" && (
+            <WorkerRegistryViewer
+              files={agent.workerFiles ?? defaultWorkerFiles}
+              onChange={(workerFiles) => updateAgent({ workerFiles })}
+              setError={setError}
+            />
+          )}
+          {tab === "Models" && (
+            <Models
+              agent={agent}
+              data={draft}
+              onChange={(models) => setDraft((d) => ({ ...d, models }))}
+              onAssign={(modelIds) => updateAgent({ modelIds })}
+            />
+          )}
+        </div>
+      </EditModeContext.Provider>
       <footer className="workspace-footer">
         <span className={dirty ? "dirty-indicator" : "saved-indicator"}>
           {dirty ? <span className="status-dot" /> : <ShieldCheck size={15} />}{" "}
           {dirty ? "Unsaved changes" : status || "All changes saved"}
         </span>
         <div>
+          <Button
+            className={editing ? "edit-mode-active" : ""}
+            onClick={() => setEditing(!editing)}
+          >
+            <Pencil size={15} />
+            {editing ? "Exit edit mode" : "Edit mode"}
+          </Button>
           <Button
             onClick={() => {
               if (!dirty || confirm("Discard changes since the last save?")) {
@@ -277,11 +322,7 @@ export function Workspace({
           >
             Discard changes
           </Button>
-          <Button onClick={() => onExport(draft)}>
-            <ArrowDownToLine size={15} />
-            Export
-          </Button>
-          <Button primary onClick={save} disabled={!dirty}>
+          <Button primary onClick={() => save()} disabled={!dirty || !editing}>
             <Save size={15} />
             Save changes
           </Button>
@@ -290,7 +331,7 @@ export function Workspace({
     </Dialog>
   );
 }
-function PromptEditor({
+export function PromptEditor({
   prompts,
   onChange,
   role,
@@ -301,6 +342,7 @@ function PromptEditor({
   role: string;
   source?: string;
 }) {
+  const editing = useEditMode();
   const [id, setId] = useState(prompts[0]?.id || "");
   const [preview, setPreview] = useState(false);
   const [values, setValues] = useState<Record<string, string>>({
@@ -321,6 +363,7 @@ function PromptEditor({
           <p>Shape how this {role} interprets context and responds.</p>
         </div>
         <Button
+          disabled={!editing}
           onClick={() => {
             const next = {
               id: crypto.randomUUID(),
@@ -369,6 +412,7 @@ function PromptEditor({
               <label>
                 Prompt name
                 <input
+                  readOnly={!editing}
                   value={p.name}
                   onChange={(e) => patch({ name: e.target.value })}
                 />
@@ -376,6 +420,7 @@ function PromptEditor({
               <label>
                 Purpose
                 <input
+                  readOnly={!editing}
                   value={p.purpose}
                   onChange={(e) => patch({ purpose: e.target.value })}
                 />
@@ -408,6 +453,7 @@ function PromptEditor({
                   Preview
                 </button>
                 <button
+                  disabled={!editing}
                   aria-label="Remove prompt"
                   onClick={() => {
                     if (confirm("Remove this prompt?")) {
@@ -430,6 +476,7 @@ function PromptEditor({
             ) : (
               <textarea
                 className="prompt-code"
+                readOnly={!editing}
                 aria-label="Prompt content"
                 value={p.content}
                 onChange={(e) => patch({ content: e.target.value })}
@@ -479,7 +526,7 @@ function PromptEditor({
 function LayersIcon() {
   return <Settings2 size={14} />;
 }
-function Models({
+export function Models({
   agent,
   data,
   onChange,
@@ -490,6 +537,7 @@ function Models({
   onChange: (m: ModelProfile[]) => void;
   onAssign: (ids: string[]) => void;
 }) {
+  const editing = useEditMode();
   const assigned = data.models.filter((m) => agent.modelIds.includes(m.id));
   const [id, setId] = useState(assigned[0]?.id || "");
   const m = assigned.find((m) => m.id === id) || assigned[0];
@@ -583,7 +631,7 @@ function Models({
       </div>
       {m ? (
         <>
-          <section className="panel model-panel">
+          <fieldset disabled={!editing} className="panel model-panel">
             <div className="panel-title">
               <Settings2 size={17} />
               <h4>Provider & connection</h4>
@@ -628,8 +676,8 @@ function Models({
               Credential references are labels such as AZURE_OPENAI_API_KEY.
               Actual credentials are not entered here.
             </p>
-          </section>
-          <section className="panel model-panel">
+          </fieldset>
+          <fieldset disabled={!editing} className="panel model-panel">
             <div className="panel-title">
               <Settings2 size={17} />
               <h4>
@@ -696,7 +744,7 @@ function Models({
               Availability of individual settings depends on the chosen provider
               and model.
             </p>
-          </section>
+          </fieldset>
         </>
       ) : (
         <div className="empty-state">

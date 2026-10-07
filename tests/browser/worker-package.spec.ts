@@ -8,6 +8,7 @@ test("worker registry supports authoring, imports, discard and persistence separ
 }) => {
   await page.goto("/");
   await page.getByRole("button", { name: /02 planner/i }).click();
+  await page.getByRole("button", { name: "Create draft", exact: true }).click();
   await page.getByRole("tab", { name: /Worker Definitions/ }).click();
   await expect(
     page.getByRole("heading", { name: "Worker definitions package" }),
@@ -56,27 +57,15 @@ test("worker registry supports authoring, imports, discard and persistence separ
   await expect(
     page.getByRole("textbox", { name: /Edit .*guide.md/ }),
   ).toHaveValue("# Reference guide");
-  await page.getByRole("button", { name: "Save changes", exact: true }).click();
+  await page.getByRole("button", { name: "Save draft", exact: true }).click();
   await page.reload();
   await page.getByRole("button", { name: /02 planner/i }).click();
+  await page.getByRole("button", { name: "Resume draft", exact: true }).click();
   await expect(
     page.locator('.file-tree button[title="custom/definition.md"]'),
   ).toHaveCount(0);
   await page.getByRole("tab", { name: /Worker Definitions/ }).click();
   await page.locator('.file-tree button[title="custom/definition.md"]').click();
-  await expect(
-    page.getByRole("textbox", {
-      name: "Edit custom/definition.md",
-      exact: true,
-    }),
-  ).toHaveValue("# Custom worker\nValidate scope.");
-  await page
-    .getByRole("textbox", { name: "Edit custom/definition.md", exact: true })
-    .fill("Discard me");
-  page.once("dialog", (d) => d.accept());
-  await page
-    .getByRole("button", { name: "Discard changes", exact: true })
-    .click();
   await expect(
     page.getByRole("textbox", {
       name: "Edit custom/definition.md",
@@ -89,4 +78,11 @@ test("worker registry supports authoring, imports, discard and persistence separ
   await expect(
     page.locator('.file-tree button[title$="reference/guide.md"]'),
   ).toHaveCount(1);
+  await page
+    .getByRole("button", { name: "Discard draft", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Delete draft", exact: true }).click();
+  await expect(
+    page.locator('.file-tree button[title="worker--new.md"]'),
+  ).toHaveCount(0);
 });

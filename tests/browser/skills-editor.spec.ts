@@ -7,6 +7,7 @@ test("planner Skills has the registry-style IDE and retains authoring controls",
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto("/");
   await page.getByRole("button", { name: /02 planner/i }).click();
+  await page.getByRole("button", { name: "Create draft", exact: true }).click();
   await expect(page.locator(".skills-ide")).toBeVisible();
   for (const name of [
     "Add file",
@@ -26,7 +27,7 @@ test("planner Skills has the registry-style IDE and retains authoring controls",
   await source.fill(
     original + "\n\n# New section\nPreserve this edit when switching tabs.",
   );
-const routing = page.locator('.file-tree button[title="routing/SKILL.md"]');
+  const routing = page.locator('.file-tree button[title="routing/SKILL.md"]');
   await routing.click();
   await expect(
     page.getByRole("tablist", { name: "Open skill files" }).getByRole("tab"),
@@ -62,6 +63,7 @@ test("sub-agent files remain editable across add, import, preview, save and dele
 }) => {
   await page.goto("/");
   await page.getByRole("button", { name: /01 PQA Analysis/ }).click();
+  await page.getByRole("button", { name: "Edit mode", exact: true }).click();
   await page.getByRole("button", { name: "Add folder", exact: true }).click();
   await page
     .getByRole("textbox", { name: "New folder", exact: true })
