@@ -586,7 +586,6 @@ function App() {
           source={base}
           onClose={() => setSelected(null)}
           onSave={commit}
-          onExport={download}
         />
       )}
       {connect && (

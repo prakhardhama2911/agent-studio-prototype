@@ -1,7 +1,6 @@
 ﻿import React, { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import {
-  ArrowDownToLine,
   ArrowUpFromLine,
   ArrowUpRight,
   BookOpen,
@@ -47,14 +46,12 @@ export function Workspace({
   agentId,
   onClose,
   onSave,
-  onExport,
 }: {
   data: StudioData;
   source: StudioData;
   agentId: string;
   onClose: () => void;
   onSave: (d: StudioData) => void;
-  onExport: (d: StudioData) => void;
 }) {
   const [draft, setDraft] = useState(() => structuredClone(data));
   const [saved, setSaved] = useState(() => JSON.stringify(data));
@@ -276,10 +273,6 @@ export function Workspace({
             disabled={!dirty}
           >
             Discard changes
-          </Button>
-          <Button onClick={() => onExport(draft)}>
-            <ArrowDownToLine size={15} />
-            Export
           </Button>
           <Button primary onClick={save} disabled={!dirty}>
             <Save size={15} />
