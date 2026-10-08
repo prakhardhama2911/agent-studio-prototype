@@ -39,9 +39,7 @@ import {
   saveDraft,
 } from "./lib/core.mjs";
 import { readApi } from "./lib/api";
-import { AgentWorkspace } from "./AgentWorkspace";
-import { loadActiveSummaries, packageSummary } from "./agentWorkflowService";
-import type { ActiveSummary } from "./agentWorkflowService";
+import { Workspace } from "./workspace";
 import { Badge, Button, Dialog } from "./ui";
 import "./styles.css";
 function download(data: StudioData) {
@@ -60,31 +58,6 @@ function App() {
   const [data, setData] = useState<StudioData>(freshSeed);
   const [base, setBase] = useState<StudioData>(freshSeed);
   const [storageKey, setStorageKey] = useState(sampleKey);
-  const [activeSummaries, setActiveSummaries] = useState<
-    Record<string, ActiveSummary>
-  >({});
-  useEffect(() => {
-    let active = true;
-    const refresh = () => {
-      void loadActiveSummaries(
-        storageKey,
-        data.agents.map((a) => a.id),
-      )
-        .then((value) => {
-          if (active) setActiveSummaries(value);
-        })
-        .catch(() => {});
-    };
-    setActiveSummaries({});
-    refresh();
-    window.addEventListener("agent-workflow-change", refresh);
-    window.addEventListener("storage", refresh);
-    return () => {
-      active = false;
-      window.removeEventListener("agent-workflow-change", refresh);
-      window.removeEventListener("storage", refresh);
-    };
-  }, [storageKey, data.agents]);
   const [mode, setMode] = useState<"sample" | "live">("sample");
   const [token, setToken] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
@@ -460,15 +433,11 @@ function App() {
                       </span>
                       <span>
                         <FileText size={13} />
-                        {activeSummaries[a.id]?.prompts ??
-                          a.prompts.length}{" "}
-                        prompts
+                        {a.prompts.length} prompts
                       </span>
                       <span>
                         <Boxes size={13} />
-                        {activeSummaries[a.id]?.models ??
-                          a.modelIds.length}{" "}
-                        models
+                        {a.modelIds.length} models
                       </span>
                     </div>
                     <div className="card-footer">
@@ -609,19 +578,15 @@ function App() {
           e.target.value = "";
         }}
       />
-      {selectedAgent && selectedAgent.role !== "coordinator" && (
-        <AgentWorkspace
-          key={storageKey + selectedAgent.id}
+      {selectedAgent && (
+        <Workspace
+          key={selectedAgent.id}
           data={data}
-          agent={selectedAgent}
-          catalogId={storageKey}
-          onActiveChange={(id, content) =>
-            setActiveSummaries((previous) => ({
-              ...previous,
-              [id]: packageSummary(content),
-            }))
-          }
+          agentId={selectedAgent.id}
+          source={base}
           onClose={() => setSelected(null)}
+          onSave={commit}
+          onExport={download}
         />
       )}
       {connect && (
@@ -687,28 +652,14 @@ function App() {
         <ManageGroup
           group={data.groups.find((g) => g.id === manage)!}
           onClose={() => setManage(null)}
-          onSave={(name, description, publish) => {
-            commit({
+          onSave={(name, description) => {
+            safeCommit({
               ...data,
               groups: data.groups.map((g) =>
-                g.id === manage
-                  ? {
-                      ...g,
-                      name,
-                      description,
-                      ...(publish
-                        ? {
-                            publishedConfiguration: JSON.stringify({
-                              name,
-                              description,
-                            }),
-                            publishedAt: new Date().toISOString(),
-                          }
-                        : {}),
-                    }
-                  : g,
+                g.id === manage ? { ...g, name, description } : g,
               ),
             });
+            setManage(null);
           }}
         />
       )}
@@ -895,64 +846,20 @@ function ManageGroup({
 }: {
   group: Group;
   onClose: () => void;
-  onSave: (n: string, d: string, publish: boolean) => void;
+  onSave: (n: string, d: string) => void;
 }) {
-  const [name, setName] = useState(group.name);
-  const [description, setDescription] = useState(group.description);
-  const [editing, setEditing] = useState(false);
-  const [error, setError] = useState("");
-  const [status, setStatus] = useState("");
-  const dirty = name !== group.name || description !== group.description;
-  const publish = (publishing: boolean) => {
-    try {
-      onSave(name.trim(), description.trim(), publishing);
-      setName(name.trim());
-      setDescription(description.trim());
-      setError("");
-      setStatus(publishing ? "Changes published" : "Changes saved");
-      if (publishing) setEditing(false);
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  };
-  const close = () => {
-    if (!dirty || confirm("Discard unsaved group changes?")) onClose();
-  };
+  const [name, setName] = useState(group.name),
+    [description, setDescription] = useState(group.description);
   return (
-    <Dialog title="Manage group" eyebrow="GROUP CONFIGURATION" onClose={close}>
-      <div className="group-publish">
-        <Button
-          primary
-          disabled={
-            !name.trim() ||
-            JSON.stringify({
-              name: name.trim(),
-              description: description.trim(),
-            }) === group.publishedConfiguration
-          }
-          onClick={() => publish(true)}
-        >
-          Publish changes
-        </Button>
-      </div>
+    <Dialog title="Manage group" eyebrow="PRESENTATION GROUP" onClose={onClose}>
       <div className="dialog-body">
-        {error && (
-          <div className="alert" role="alert">
-            {error}
-          </div>
-        )}
         <label>
           Name
-          <input
-            readOnly={!editing}
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
+          <input value={name} onChange={(e) => setName(e.target.value)} />
         </label>
         <label>
           Description
           <textarea
-            readOnly={!editing}
             rows={3}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
@@ -962,32 +869,13 @@ function ManageGroup({
           Groups organize sub-agents. Skills, prompts, and model settings belong
           to the executable agents inside them.
         </div>
-        {status && <p role="status">{status}</p>}
       </div>
       <footer className="dialog-footer">
-        <Button
-          className={editing ? "edit-mode-active" : ""}
-          onClick={() => setEditing(!editing)}
-        >
-          {editing ? "Exit edit mode" : "Edit mode"}
-        </Button>
-        <Button
-          disabled={!dirty}
-          onClick={() => {
-            if (confirm("Discard changes since the last save?")) {
-              setName(group.name);
-              setDescription(group.description);
-              setError("");
-              setStatus("Changes discarded");
-            }
-          }}
-        >
-          Discard changes
-        </Button>
+        <Button onClick={onClose}>Cancel</Button>
         <Button
           primary
-          disabled={!editing || !dirty || !name.trim()}
-          onClick={() => publish(false)}
+          disabled={!name.trim()}
+          onClick={() => onSave(name.trim(), description.trim())}
         >
           Save changes
         </Button>

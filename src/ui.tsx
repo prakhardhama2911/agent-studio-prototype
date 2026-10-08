@@ -6,14 +6,12 @@ export function Dialog({
   children,
   onClose,
   wide = false,
-  className = "",
 }: {
   title: string;
   eyebrow: string;
   children: React.ReactNode;
   onClose: () => void;
   wide?: boolean;
-  className?: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -26,10 +24,9 @@ export function Dialog({
   return (
     <dialog
       ref={ref}
-      className={`${wide ? "dialog wide" : "dialog"} ${className}`}
+      className={wide ? "dialog wide" : "dialog"}
       onCancel={(e) => {
         e.preventDefault();
-        e.stopPropagation();
         onClose();
       }}
     >

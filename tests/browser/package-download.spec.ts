@@ -1,4 +1,4 @@
-import { test, expect } from "./static-fixture";
+import { test, expect } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import { unzipSync, strFromU8 } from "fflate";
 
@@ -7,7 +7,6 @@ test("Planner downloads complete skills and registry packages", async ({
 }) => {
   await page.goto("/");
   await page.getByRole("button", { name: /02 planner/i }).click();
-  await page.getByRole("button", { name: "Create draft", exact: true }).click();
   for (const [tab, root] of [
     ["Skills", "skills"],
     ["Worker Definitions", "worker-registry"],
@@ -42,7 +41,6 @@ test("Planner downloads complete skills and registry packages", async ({
   }
   await page.reload();
   await page.getByRole("button", { name: /01 PQA Analysis/ }).click();
-  await page.getByRole("button", { name: "Create draft", exact: true }).click();
   const pending = page.waitForEvent("download");
   await page.getByRole("button", { name: "Download folder as ZIP" }).click();
   const download = await pending;

@@ -1,5 +1,4 @@
 ﻿import React from "react";
-import { useEditMode } from "./EditModeContext";
 import { SourceLine } from "./SourceLine";
 
 /** The source layer defines the canvas size; the native input keeps selection,
@@ -15,7 +14,6 @@ export function SkillCodeEditor({
   onChange: (content: string) => void;
   wrap: boolean;
 }) {
-  const editing = useEditMode();
   const lines = content.replace(/\r\n/g, "\n").split("\n");
   const end = lines[0] === "---" ? lines.indexOf("---", 1) : -1;
   const yaml = /\.ya?ml$/i.test(path);
@@ -36,7 +34,6 @@ export function SkillCodeEditor({
           ))}
         </div>
         <textarea
-          readOnly={!editing}
           className="skills-text-input"
           aria-label={`Edit ${path}`}
           spellCheck={false}

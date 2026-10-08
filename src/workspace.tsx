@@ -1,26 +1,296 @@
-import React, { useState } from "react";
+﻿import React, { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import {
+  ArrowDownToLine,
+  ArrowUpFromLine,
   ArrowUpRight,
   BookOpen,
   Boxes,
+  Check,
   ChevronRight,
   Code2,
   Copy,
+  FilePlus2,
   FileText,
+  Folder,
+  FolderOpen,
+  FolderPlus,
   Network,
   Plus,
+  RotateCcw,
+  Save,
+  Search,
   Settings2,
   ShieldCheck,
   Sparkles,
   Trash2,
+  X,
 } from "lucide-react";
-import { useEditMode } from "./EditModeContext";
-import { Badge, Button } from "./ui";
+import { Badge, Button, Dialog } from "./ui";
+import { SkillPackageEditor } from "./SkillPackageEditor";
 import { ModelSharingInfo } from "./ModelSharingInfo";
 import type { Agent, ModelProfile, Prompt, StudioData } from "./types";
-import { editAssignedModel } from "./lib/core.mjs";
-export function PromptEditor({
+import { validateFile, validatePath, editAssignedModel } from "./lib/core.mjs";
+import {
+  WorkerRegistryViewer,
+  defaultWorkerFiles,
+} from "./WorkerRegistryViewer";
+const tabs = [
+  { name: "Skills", icon: FolderOpen },
+  { name: "Prompts", icon: FileText },
+  { name: "Worker Definitions", icon: Network },
+  { name: "Models", icon: Boxes },
+];
+export function Workspace({
+  data,
+  source,
+  agentId,
+  onClose,
+  onSave,
+  onExport,
+}: {
+  data: StudioData;
+  source: StudioData;
+  agentId: string;
+  onClose: () => void;
+  onSave: (d: StudioData) => void;
+  onExport: (d: StudioData) => void;
+}) {
+  const [draft, setDraft] = useState(() => structuredClone(data));
+  const [saved, setSaved] = useState(() => JSON.stringify(data));
+  const [tab, setTab] = useState("Skills");
+  const [error, setError] = useState("");
+  const [status, setStatus] = useState("");
+  const agent = draft.agents.find((a) => a.id === agentId)!;
+  const visibleTabs = tabs.filter(
+    (item) => agent.role !== "worker" || item.name !== "Worker Definitions",
+  );
+  const dirty = JSON.stringify(draft) !== saved;
+  const updateAgent = (patch: Partial<Agent>) =>
+    setDraft((d) => ({
+      ...d,
+      agents: d.agents.map((a) => (a.id === agentId ? { ...a, ...patch } : a)),
+    }));
+  useEffect(() => {
+    const prevent = (e: BeforeUnloadEvent) => {
+      if (dirty) e.preventDefault();
+    };
+    window.addEventListener("beforeunload", prevent);
+    return () => window.removeEventListener("beforeunload", prevent);
+  }, [dirty]);
+  const close = () => {
+    if (!dirty || confirm("Discard unsaved changes and close this workspace?"))
+      onClose();
+  };
+  const save = () => {
+    try {
+      for (const a of draft.agents) {
+        for (const [p, c] of Object.entries({
+          ...a.files,
+          ...Object.fromEntries(
+            Object.entries(a.workerFiles ?? {}).map(([path, content]) => [
+              `worker-registry/${path}`,
+              content,
+            ]),
+          ),
+        })) {
+          const e = validateFile(p, c);
+          if (e) throw Error(`${a.name} / ${p}: ${e}`);
+        }
+        for (const p of a.prompts)
+          if (!p.name.trim() || !p.content.trim())
+            throw Error("Prompt names and content are required.");
+      }
+      for (const m of draft.models) {
+        if (!m.name.trim() || !m.provider.trim())
+          throw Error("Model profile name and provider are required.");
+        if (m.timeout <= 0 || m.retries < 0 || !Number.isInteger(m.retries))
+          throw Error(
+            "Timeout must be positive and retries must be a non-negative integer.",
+          );
+        if (
+          m.kind === "Language model" &&
+          (m.temperature < 0 ||
+            m.temperature > 2 ||
+            m.topP < 0 ||
+            m.topP > 1 ||
+            m.maxTokens < 1)
+        )
+          throw Error(
+            "Check generation settings: temperature 0–2, top P 0–1, output tokens at least 1.",
+          );
+        if (m.kind === "Embedding" && (m.dimensions < 1 || m.batchSize < 1))
+          throw Error("Embedding dimensions and batch size must be positive.");
+      }
+      const next = {
+        ...draft,
+        agents: draft.agents.map((a) =>
+          a.id === agentId ? { ...a, origin: "Local draft" as const } : a,
+        ),
+      };
+      onSave(next);
+      setDraft(next);
+      setSaved(JSON.stringify(next));
+      setError("");
+      setStatus("Changes saved");
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+  const count = (name: string) =>
+    name === "Skills"
+      ? Object.keys(agent.files).length
+      : name === "Prompts"
+        ? agent.prompts.length
+        : name === "Worker Definitions"
+          ? agent.role === "worker"
+            ? draft.workers.filter((w) => w.agentId === agent.id).length
+            : Object.keys(agent.workerFiles ?? defaultWorkerFiles).length
+          : name === "Models"
+            ? agent.modelIds.length
+            : null;
+  return (
+    <Dialog
+      title={agent.name}
+      eyebrow={`AGENT STUDIO / ${agent.role === "worker" ? "SUB-AGENT" : agent.role.toUpperCase()} CONFIGURATION`}
+      onClose={close}
+      wide
+    >
+      <div className="workspace-summary">
+        <div className={`workspace-symbol ${agent.role}`}>
+          <Network size={24} />
+        </div>
+        <div>
+          <div className="summary-badges">
+            <Badge tone="green">
+              {agent.role === "worker" ? "Planner selectable" : agent.role}
+            </Badge>
+            {agent.groupId && (
+              <Badge tone="neutral">
+                {draft.groups.find((group) => group.id === agent.groupId)
+                  ?.name || "Analysis group"}
+              </Badge>
+            )}
+            {dirty && <Badge tone="amber">Unsaved changes</Badge>}
+          </div>
+          <p>{agent.description}</p>
+        </div>
+        <span className="workspace-id">{agent.id}</span>
+      </div>
+      <div className="tabs" role="tablist" aria-label="Agent configuration">
+        {visibleTabs.map(({ name, icon: Icon }) => (
+          <button
+            key={name}
+            id={`tab-${name.replaceAll(" ", "-")}`}
+            role="tab"
+            aria-selected={tab === name}
+            aria-controls="workspace-panel"
+            tabIndex={tab === name ? 0 : -1}
+            onKeyDown={(e) => {
+              if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+                e.preventDefault();
+                const index =
+                  (visibleTabs.findIndex((t) => t.name === tab) +
+                    (e.key === "ArrowRight" ? 1 : -1) +
+                    visibleTabs.length) %
+                  visibleTabs.length;
+                setTab(visibleTabs[index].name);
+                document
+                  .getElementById(
+                    `tab-${visibleTabs[index].name.replaceAll(" ", "-")}`,
+                  )
+                  ?.focus();
+              }
+            }}
+            onClick={() => {
+              setTab(name);
+              setError("");
+            }}
+            className={tab === name ? "selected" : ""}
+          >
+            <Icon size={16} />
+            {name}
+            {count(name) !== null && <span>{count(name)}</span>}
+          </button>
+        ))}
+      </div>
+      <div
+        className="workspace-body"
+        role="tabpanel"
+        id="workspace-panel"
+        aria-labelledby={`tab-${tab.replaceAll(" ", "-")}`}
+      >
+        {error && (
+          <div className="alert" role="alert">
+            {error}
+          </div>
+        )}
+        {tab === "Skills" && (
+          <SkillPackageEditor
+            downloadable
+            downloadPrefix={agent.id}
+            files={agent.files}
+            onChange={(files) => updateAgent({ files })}
+            source={agent.skillOrigin || agent.origin}
+            setError={setError}
+          />
+        )}
+        {tab === "Prompts" && (
+          <PromptEditor
+            prompts={agent.prompts}
+            onChange={(prompts) => updateAgent({ prompts })}
+            role={agent.role}
+            source={agent.source}
+          />
+        )}
+        {tab === "Worker Definitions" && agent.role === "planner" && (
+          <WorkerRegistryViewer
+            files={agent.workerFiles ?? defaultWorkerFiles}
+            onChange={(workerFiles) => updateAgent({ workerFiles })}
+            setError={setError}
+          />
+        )}
+        {tab === "Models" && (
+          <Models
+            agent={agent}
+            data={draft}
+            onChange={(models) => setDraft((d) => ({ ...d, models }))}
+            onAssign={(modelIds) => updateAgent({ modelIds })}
+          />
+        )}
+      </div>
+      <footer className="workspace-footer">
+        <span className={dirty ? "dirty-indicator" : "saved-indicator"}>
+          {dirty ? <span className="status-dot" /> : <ShieldCheck size={15} />}{" "}
+          {dirty ? "Unsaved changes" : status || "All changes saved"}
+        </span>
+        <div>
+          <Button
+            onClick={() => {
+              if (!dirty || confirm("Discard changes since the last save?")) {
+                setDraft(JSON.parse(saved));
+                setError("");
+                setStatus("Changes discarded");
+              }
+            }}
+            disabled={!dirty}
+          >
+            Discard changes
+          </Button>
+          <Button onClick={() => onExport(draft)}>
+            <ArrowDownToLine size={15} />
+            Export
+          </Button>
+          <Button primary onClick={save} disabled={!dirty}>
+            <Save size={15} />
+            Save changes
+          </Button>
+        </div>
+      </footer>
+    </Dialog>
+  );
+}
+function PromptEditor({
   prompts,
   onChange,
   role,
@@ -31,7 +301,6 @@ export function PromptEditor({
   role: string;
   source?: string;
 }) {
-  const editing = useEditMode();
   const [id, setId] = useState(prompts[0]?.id || "");
   const [preview, setPreview] = useState(false);
   const [values, setValues] = useState<Record<string, string>>({
@@ -52,7 +321,6 @@ export function PromptEditor({
           <p>Shape how this {role} interprets context and responds.</p>
         </div>
         <Button
-          disabled={!editing}
           onClick={() => {
             const next = {
               id: crypto.randomUUID(),
@@ -101,7 +369,6 @@ export function PromptEditor({
               <label>
                 Prompt name
                 <input
-                  readOnly={!editing}
                   value={p.name}
                   onChange={(e) => patch({ name: e.target.value })}
                 />
@@ -109,7 +376,6 @@ export function PromptEditor({
               <label>
                 Purpose
                 <input
-                  readOnly={!editing}
                   value={p.purpose}
                   onChange={(e) => patch({ purpose: e.target.value })}
                 />
@@ -142,7 +408,6 @@ export function PromptEditor({
                   Preview
                 </button>
                 <button
-                  disabled={!editing}
                   aria-label="Remove prompt"
                   onClick={() => {
                     if (confirm("Remove this prompt?")) {
@@ -165,7 +430,6 @@ export function PromptEditor({
             ) : (
               <textarea
                 className="prompt-code"
-                readOnly={!editing}
                 aria-label="Prompt content"
                 value={p.content}
                 onChange={(e) => patch({ content: e.target.value })}
@@ -215,20 +479,17 @@ export function PromptEditor({
 function LayersIcon() {
   return <Settings2 size={14} />;
 }
-export function Models({
+function Models({
   agent,
   data,
   onChange,
   onAssign,
-  usageAgents,
 }: {
   agent: Agent;
   data: StudioData;
   onChange: (m: ModelProfile[]) => void;
   onAssign: (ids: string[]) => void;
-  usageAgents?: Agent[];
 }) {
-  const editing = useEditMode();
   const assigned = data.models.filter((m) => agent.modelIds.includes(m.id));
   const [id, setId] = useState(assigned[0]?.id || "");
   const m = assigned.find((m) => m.id === id) || assigned[0];
@@ -304,8 +565,7 @@ export function Models({
                 <strong>{x.name}</strong>
                 <ModelSharingInfo
                   name={x.name}
-                  packageScoped={!!usageAgents}
-                  agents={(usageAgents ?? data.agents)
+                  agents={data.agents
                     .filter(
                       (a) =>
                         a.role !== "coordinator" && a.modelIds.includes(x.id),
@@ -323,7 +583,7 @@ export function Models({
       </div>
       {m ? (
         <>
-          <fieldset disabled={!editing} className="panel model-panel">
+          <section className="panel model-panel">
             <div className="panel-title">
               <Settings2 size={17} />
               <h4>Provider & connection</h4>
@@ -368,8 +628,8 @@ export function Models({
               Credential references are labels such as AZURE_OPENAI_API_KEY.
               Actual credentials are not entered here.
             </p>
-          </fieldset>
-          <fieldset disabled={!editing} className="panel model-panel">
+          </section>
+          <section className="panel model-panel">
             <div className="panel-title">
               <Settings2 size={17} />
               <h4>
@@ -436,7 +696,7 @@ export function Models({
               Availability of individual settings depends on the chosen provider
               and model.
             </p>
-          </fieldset>
+          </section>
         </>
       ) : (
         <div className="empty-state">
