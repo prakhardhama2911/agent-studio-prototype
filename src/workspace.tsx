@@ -38,7 +38,6 @@ const tabs = [
   { name: "Skills", icon: FolderOpen },
   { name: "Prompts", icon: FileText },
   { name: "Worker Definitions", icon: Network },
-  { name: "Models", icon: Boxes },
 ];
 export function Workspace({
   data,
@@ -245,14 +244,6 @@ export function Workspace({
             files={agent.workerFiles ?? defaultWorkerFiles}
             onChange={(workerFiles) => updateAgent({ workerFiles })}
             setError={setError}
-          />
-        )}
-        {tab === "Models" && (
-          <Models
-            agent={agent}
-            data={draft}
-            onChange={(models) => setDraft((d) => ({ ...d, models }))}
-            onAssign={(modelIds) => updateAgent({ modelIds })}
           />
         )}
       </div>

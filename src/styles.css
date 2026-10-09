@@ -356,18 +356,58 @@ small {
 .search {
   display: flex;
   align-items: center;
-  gap: 10px;
-  color: #9ba2b0;
-  width: 310px;
+  gap: 12px;
+  color: #6254b8;
+  width: 440px;
+  max-width: 100%;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid #aeb5cb;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 2px 6px rgb(31 40 66 / 6%);
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+.search:hover {
+  border-color: #7d72c7;
+}
+.search:focus-within {
+  border-color: #6755ce;
+  box-shadow: 0 0 0 3px rgb(103 85 206 / 16%);
+}
+.search > svg {
+  flex-shrink: 0;
 }
 .search input {
+  flex: 1;
+  min-width: 0;
   border: none;
   background: transparent;
-  padding: 7px 0;
-  font-size: 12px;
+  padding: 12px 0;
+  font-size: 14px;
+  color: #263049;
+}
+.search input::placeholder {
+  color: #626d82;
+  opacity: 1;
+}
+.search input:focus {
+  outline: none;
+  box-shadow: none;
 }
 .search button {
   display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  color: #626d82;
+}
+.search button:hover {
+  background: #f0edff;
+  color: #5140aa;
 }
 .toolbar-actions {
   display: flex;
@@ -2757,4 +2797,18 @@ small {
   .skills-highlight .registry-line code {
     visibility: hidden;
   }
+}
+.group-entry .agent-symbol, .subagent-card .agent-symbol { color: var(--accent); background: #f1f0fc; }
+.group-entry > p, .subagent-card > p { max-width: none; color: #69768c; margin-bottom: 22px; }
+.group-entry .card-footer > span:last-child { display: flex; align-items: center; gap: 6px; }
+.agent-card:focus-visible { outline: 3px solid #8b7feb; outline-offset: 3px; }
+.back-to-groups { margin-bottom: 24px; }
+.group-detail-heading { display: flex; justify-content: space-between; align-items: center; gap: 24px; }
+.group-detail-heading h2 { margin: 10px 0; font-size: 28px; letter-spacing: -0.7px; }
+.group-detail-heading p { max-width: 720px; color: #69768c; line-height: 1.7; }
+.group-count { display: inline-block; margin-top: 12px; color: #6254b8; font-size: 12px; font-weight: 600; }
+.group-detail-actions { display: flex; flex-shrink: 0; gap: 10px; }
+@media (max-width: 700px) {
+  .group-detail-heading { align-items: flex-start; flex-direction: column; }
+  .group-detail-actions { flex-wrap: wrap; }
 }

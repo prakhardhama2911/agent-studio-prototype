@@ -1,6 +1,7 @@
 ﻿import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
+  ArrowLeft,
   ArrowDownToLine,
   ArrowUpFromLine,
   ArrowUpRight,
@@ -68,6 +69,7 @@ function App() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [search, setSearch] = useState("");
+  const [groupId, setGroupId] = useState<string | null>(null);
   const [help, setHelp] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   useEffect(() => {
@@ -263,6 +265,7 @@ function App() {
     text.toLowerCase().includes(search.toLowerCase());
   const agents = data.agents;
   const selectedAgent = agents.find((a) => a.id === selected);
+  const activeGroup = data.groups.find((g) => g.id === groupId);
   return (
     <>
       <nav className="topbar">
@@ -341,215 +344,216 @@ function App() {
           </div>
         </header>
         <section className="catalog">
-          <div className="catalog-heading">
-            <div>
-              <div className="eyebrow">ACTIVE ANALYSIS CATALOG</div>
-              <h2>Coordinator and analysis groups</h2>
-            </div>
-            <p>
-              Configure the agents behind your analyses.
-              <br />
-              Open a card to explore its complete configuration.
-            </p>
-          </div>
-          <div className="toolbar">
-            <div className="search">
-              <Search size={16} />
-              <input
-                aria-label="Search agents and groups"
-                placeholder="Find an agent or group…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-              {search && (
-                <button aria-label="Clear search" onClick={() => setSearch("")}>
-                  <X size={14} />
-                </button>
+          {activeGroup ? (
+            <GroupDetail
+              key={activeGroup.id}
+              group={activeGroup}
+              agents={agents.filter(
+                (a) => a.role === "worker" && a.groupId === activeGroup.id,
               )}
-            </div>
-          </div>
-          {error && (
-            <div className="alert" role="alert">
-              {error}
-              <button onClick={() => setError("")} aria-label="Dismiss error">
-                <X size={16} />
-              </button>
-            </div>
-          )}
-          {busy && (
-            <div className="loading">
-              <Loader2 size={18} className="spin" /> Reading backend
-              configuration…
-            </div>
-          )}
-          <div className="card-grid">
-            {agents
-              .filter(
+              onBack={() => {
+                const previous = activeGroup.id;
+                setGroupId(null);
+                requestAnimationFrame(() =>
+                  document.getElementById("group-card-" + previous)?.focus(),
+                );
+              }}
+              onOpen={openAgent}
+              onManage={() => setManage(activeGroup.id)}
+              onAdd={() => setNewItem(activeGroup.id)}
+            />
+          ) : (
+            <>
+              <div className="catalog-heading">
+                <div>
+                  <div className="eyebrow">ACTIVE ANALYSIS CATALOG</div>
+                  <h2>Coordinator and analysis groups</h2>
+                </div>
+                <p>
+                  Configure the agents behind your analyses.
+                  <br />
+                  Open a card to explore its complete configuration.
+                </p>
+              </div>
+              <div className="toolbar">
+                <div className="search">
+                  <Search size={20} />
+                  <input
+                    aria-label="Search agents and groups"
+                    placeholder="Find an agent or group…"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                  />
+                  {search && (
+                    <button
+                      aria-label="Clear search"
+                      onClick={() => setSearch("")}
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+              </div>
+              {error && (
+                <div className="alert" role="alert">
+                  {error}
+                  <button
+                    onClick={() => setError("")}
+                    aria-label="Dismiss error"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              )}
+              {busy && (
+                <div className="loading">
+                  <Loader2 size={18} className="spin" /> Reading backend
+                  configuration…
+                </div>
+              )}
+              <div className="card-grid">
+                {agents
+                  .filter(
+                    (a) =>
+                      a.role !== "worker" &&
+                      visible(a.name + " " + a.description),
+                  )
+                  .map((a) =>
+                    a.role === "coordinator" ? (
+                      <article
+                        key={a.id}
+                        className="agent-card system-card coordinator display-only"
+                        aria-label="Coordinator group"
+                      >
+                        <div className="card-top">
+                          <span className="card-index">01</span>
+                          <Badge tone="green">UI group</Badge>
+                        </div>
+                        <div className="agent-symbol">
+                          <Network size={24} />
+                        </div>
+                        <h3>{a.name}</h3>
+                        <p>
+                          Orchestrates analysis execution, delegates approved
+                          tasks to specialist agents, and brings their results
+                          together.
+                        </p>
+                      </article>
+                    ) : (
+                      <button
+                        key={a.id}
+                        className={`agent-card system-card ${a.role}`}
+                        onClick={() => openAgent(a)}
+                      >
+                        <div className="card-top">
+                          <span className="card-index">{"02"}</span>
+                          <Badge tone="purple">{a.role}</Badge>
+                        </div>
+                        <div className="agent-symbol">
+                          <BrainCircuit size={24} />
+                        </div>
+                        <h3>
+                          {a.name}
+                          <ArrowUpRight size={17} />
+                        </h3>
+                        <p>{a.description}</p>
+                        <div className="config-counts">
+                          <span>
+                            <FolderOpen size={13} />
+                            {Object.keys(a.files).length || "—"} files
+                          </span>
+                          <span>
+                            <FileText size={13} />
+                            {a.prompts.length} prompts
+                          </span>
+                          <span>
+                            <Boxes size={13} />
+                            {a.modelIds.length} models
+                          </span>
+                        </div>
+                        <div className="card-footer">
+                          <span>Planning & worker discovery</span>
+                          <ChevronRight size={16} />
+                        </div>
+                      </button>
+                    ),
+                  )}
+                {data.groups
+                  .filter((g) =>
+                    visible(
+                      g.name +
+                        " " +
+                        g.description +
+                        " " +
+                        agents
+                          .filter((a) => a.groupId === g.id)
+                          .map((a) => a.name)
+                          .join(" "),
+                    ),
+                  )
+                  .map((g, index) => {
+                    const count = agents.filter(
+                      (a) => a.role === "worker" && a.groupId === g.id,
+                    ).length;
+                    return (
+                      <button
+                        key={g.id}
+                        id={`group-card-${g.id}`}
+                        className="agent-card system-card group-entry"
+                        style={{ "--accent": g.color } as React.CSSProperties}
+                        onClick={() => setGroupId(g.id)}
+                        aria-label={`Open ${g.name}, ${count} sub-agents`}
+                      >
+                        <div className="card-top">
+                          <span className="card-index">
+                            {String(index + 3).padStart(2, "0")}
+                          </span>
+                          <Badge>UI group</Badge>
+                        </div>
+                        <div className="agent-symbol">
+                          <Layers3 size={24} />
+                        </div>
+                        <h3>
+                          {g.name}
+                          <ChevronRight size={17} />
+                        </h3>
+                        <p>{g.description}</p>
+                        <div className="card-footer">
+                          <span>
+                            {count} sub-agent{count === 1 ? "" : "s"}
+                          </span>
+                          <span>
+                            View group <ChevronRight size={14} />
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+              </div>
+              {!agents.some(
                 (a) =>
                   a.role !== "worker" && visible(a.name + " " + a.description),
-              )
-              .map((a) =>
-                a.role === "coordinator" ? (
-                  <article
-                    key={a.id}
-                    className="agent-card system-card coordinator display-only"
-                    aria-label="Coordinator group"
-                  >
-                    <div className="card-top">
-                      <span className="card-index">01</span>
-                      <Badge tone="green">UI group</Badge>
-                    </div>
-                    <div className="agent-symbol">
-                      <Network size={24} />
-                    </div>
-                    <h3>{a.name}</h3>
-                    <p>
-                      Orchestrates analysis execution, delegates approved tasks
-                      to specialist agents, and brings their results together.
-                    </p>
-                  </article>
-                ) : (
-                  <button
-                    key={a.id}
-                    className={`agent-card system-card ${a.role}`}
-                    onClick={() => openAgent(a)}
-                  >
-                    <div className="card-top">
-                      <span className="card-index">{"02"}</span>
-                      <Badge tone="purple">{a.role}</Badge>
-                    </div>
-                    <div className="agent-symbol">
-                      <BrainCircuit size={24} />
-                    </div>
-                    <h3>
-                      {a.name}
-                      <ArrowUpRight size={17} />
-                    </h3>
-                    <p>{a.description}</p>
-                    <div className="config-counts">
-                      <span>
-                        <FolderOpen size={13} />
-                        {Object.keys(a.files).length || "—"} files
-                      </span>
-                      <span>
-                        <FileText size={13} />
-                        {a.prompts.length} prompts
-                      </span>
-                      <span>
-                        <Boxes size={13} />
-                        {a.modelIds.length} models
-                      </span>
-                    </div>
-                    <div className="card-footer">
-                      <span>Planning & worker discovery</span>
-                      <ChevronRight size={16} />
-                    </div>
-                  </button>
-                ),
-              )}
-            {data.groups
-              .filter((g) =>
-                visible(
-                  g.name +
-                    " " +
-                    g.description +
-                    " " +
-                    agents
-                      .filter((a) => a.groupId === g.id)
-                      .map((a) => a.name)
-                      .join(" "),
-                ),
-              )
-              .map((g) => {
-                const children = agents.filter((a) => a.groupId === g.id);
-                return (
-                  <article
-                    className="agent-card group-card"
-                    key={g.id}
-                    style={{ "--accent": g.color } as React.CSSProperties}
-                  >
-                    <div className="group-head">
-                      <span className="group-symbol">
-                        {g.name
-                          .split(" ")
-                          .map((w) => w[0])
-                          .slice(0, 2)
-                          .join("")}
-                      </span>
-                      <div>
-                        <Badge>UI GROUP</Badge>
-                        <h3>{g.name}</h3>
-                        <p title={g.description}>{g.description}</p>
-                      </div>
-                    </div>
-                    <div className="group-subtitle">
-                      <span>SUB-AGENTS</span>
-                      <span>
-                        {children.length} agent
-                        {children.length !== 1 ? "s" : ""}
-                      </span>
-                    </div>
-                    <div className="subagent-list">
-                      {children.map((a, i) => (
-                        <button
-                          key={a.id}
-                          className="subagent"
-                          onClick={() => openAgent(a)}
-                        >
-                          <span className="row-index">
-                            {String(i + 1).padStart(2, "0")}
-                          </span>
-                          <div>
-                            <strong>{a.name}</strong>
-                            <small>{a.description}</small>
-                          </div>
-                          <ChevronRight size={15} />
-                        </button>
-                      ))}
-                      {!children.length && (
-                        <div className="empty-small">
-                          Add a sub-agent to start configuring this group.
-                        </div>
-                      )}
-                    </div>
-                    <div className="group-tags">
-                      <span className="tiny-dot" />
-                      Planner selectable
-                    </div>
-                    <div className="card-footer">
-                      <button onClick={() => setManage(g.id)}>
-                        Manage group
-                      </button>
-                      <button onClick={() => setNewItem(g.id)}>
-                        <Plus size={12} />
-                        Add sub-agent
-                      </button>
-                    </div>
-                  </article>
-                );
-              })}
-          </div>
-          {!agents.some(
-            (a) => a.role !== "worker" && visible(a.name + " " + a.description),
-          ) &&
-            !data.groups.some((g) =>
-              visible(
-                g.name +
-                  " " +
-                  g.description +
-                  " " +
-                  agents
-                    .filter((a) => a.groupId === g.id)
-                    .map((a) => a.name)
-                    .join(" "),
-              ),
-            ) && (
-              <div className="empty-state">
-                <Search />
-                <h3>No matching agents</h3>
-                <p>Try another name or clear your search.</p>
-              </div>
-            )}
+              ) &&
+                !data.groups.some((g) =>
+                  visible(
+                    g.name +
+                      " " +
+                      g.description +
+                      " " +
+                      agents
+                        .filter((a) => a.groupId === g.id)
+                        .map((a) => a.name)
+                        .join(" "),
+                  ),
+                ) && (
+                  <div className="empty-state">
+                    <Search />
+                    <h3>No matching agents</h3>
+                    <p>Try another name or clear your search.</p>
+                  </div>
+                )}
+            </>
+          )}
           <div className="catalog-foot">
             <span>Alchemy / Agent Studio</span>
           </div>
@@ -711,6 +715,132 @@ function App() {
         </div>
       )}
     </>
+  );
+}
+function GroupDetail({
+  group,
+  agents,
+  onBack,
+  onOpen,
+  onManage,
+  onAdd,
+}: {
+  group: Group;
+  agents: Agent[];
+  onBack: () => void;
+  onOpen: (agent: Agent) => void;
+  onManage: () => void;
+  onAdd: () => void;
+}) {
+  const [query, setQuery] = useState("");
+  const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    heading.current?.focus({ preventScroll: true });
+  }, []);
+  const visible = agents.filter((a) =>
+    (a.name + " " + a.description).toLowerCase().includes(query.toLowerCase()),
+  );
+  return (
+    <div className="group-detail">
+      <button className="button back-to-groups" onClick={onBack}>
+        <ArrowLeft size={16} />
+        Back to groups
+      </button>
+      <div className="group-detail-heading">
+        <div>
+          <div className="eyebrow">ANALYSIS GROUP</div>
+          <h2 ref={heading} tabIndex={-1}>
+            {group.name}
+          </h2>
+          <p>{group.description}</p>
+          <span className="group-count">
+            {agents.length} sub-agent{agents.length === 1 ? "" : "s"}
+          </span>
+        </div>
+        <div className="group-detail-actions">
+          <Button onClick={onManage}>Manage group</Button>
+          <Button primary onClick={onAdd}>
+            <Plus size={16} />
+            Add sub-agent
+          </Button>
+        </div>
+      </div>
+      <div className="toolbar">
+        <div className="search">
+          <Search size={20} />
+          <input
+            aria-label="Search sub-agents"
+            placeholder="Find a sub-agent..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          {query && (
+            <button aria-label="Clear search" onClick={() => setQuery("")}>
+              <X size={14} />
+            </button>
+          )}
+        </div>
+      </div>
+      <div className="card-grid">
+        {visible.map((agent, index) => (
+          <button
+            className="agent-card system-card subagent-card"
+            key={agent.id}
+            style={{ "--accent": group.color } as React.CSSProperties}
+            onClick={() => onOpen(agent)}
+          >
+            <div className="card-top">
+              <span className="card-index">
+                {String(index + 1).padStart(2, "0")}
+              </span>
+              <Badge tone="green">Planner selectable</Badge>
+            </div>
+            <div className="agent-symbol">
+              <Bot size={24} />
+            </div>
+            <h3>
+              {agent.name}
+              <ArrowUpRight size={17} />
+            </h3>
+            <p>{agent.description}</p>
+            <div className="config-counts">
+              <span>
+                <FolderOpen size={13} />
+                {Object.keys(agent.files).length} files
+              </span>
+              <span>
+                <FileText size={13} />
+                {agent.prompts.length} prompts
+              </span>
+            </div>
+            <div className="card-footer">
+              <span>Open configuration</span>
+              <ChevronRight size={16} />
+            </div>
+          </button>
+        ))}
+      </div>
+      {!visible.length && (
+        <div className="empty-state">
+          <Layers3 size={28} />
+          <h3>
+            {agents.length ? "No matching sub-agents" : "No sub-agents yet"}
+          </h3>
+          <p>
+            {agents.length
+              ? "Try another name or clear your search."
+              : "Add the first sub-agent to this group."}
+          </p>
+          {agents.length ? (
+            <Button onClick={() => setQuery("")}>Clear search</Button>
+          ) : (
+            <Button primary onClick={onAdd}>
+              Add sub-agent
+            </Button>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 function Connection({
