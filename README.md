@@ -31,3 +31,9 @@ The catalog and workspaces start read-only. **Edit mode** reserves the whole stu
 Use **Try the multi-user workflow → View as** to switch between Prakhar, User B and User C. To compare side by side, open two tabs in the same browser and origin, select different users, edit/save in the owner's tab, and verify that the other tab changes only after exit. File downloads and previews remain available in view mode.
 
 This is a browser-only demonstration, not an authorization boundary. Local storage holds an atomic envelope containing the visible catalog, lock and private saved catalog; Web Locks serialize writes between tabs. It requires HTTPS or localhost with Web Locks support. Existing catalog data is copied on the first lock operation without overwriting the legacy storage entry. Separate browsers/devices do not share this state. Production requires authenticated server-owned lock acquisition, ownership validation, persistence and release operations.
+
+### Page-backed Add sub-agent walkthrough
+
+Enter Edit mode, open a group, and choose **Add sub-agent**. Enter one of the sample keys (`p_rsv_vs_distribution`, `p_market_segments`, `p_brand_growth`) or select an example. **Generate from page** creates editable sub-agent and planner packages around a read-only sample contract. Save changed files before continuing to the planner package and activating. These package saves live only within the open import; canceling or leaving before activation discards them.
+
+**Activate sub-agent** stores the new agent and its generated planner package in the lock owner's private studio data. It adds a card but does not call a backend, alter the Coordinator card, or activate runtime behavior. **Exit edit mode** makes the new card visible to simulated other users. Each sample page can be bound once. Unknown keys and invalid packages display validation errors.

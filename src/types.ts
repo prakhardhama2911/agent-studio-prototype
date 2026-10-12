@@ -49,6 +49,14 @@ export interface ModelProfile {
   batchSize: number;
 }
 export interface Agent {
+  pageBinding?: {
+    pageKey: string;
+    metric: string;
+    dimensions: string;
+    plannerFiles?: Record<string, string>;
+    /** Retained for previously saved imports; new imports use plannerFiles. */
+    coordinatorFiles?: Record<string, string>;
+  };
   id: string;
   backendId?: string;
   skillId?: string;

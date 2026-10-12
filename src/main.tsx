@@ -42,6 +42,7 @@ import {
 import { readApi } from "./lib/api";
 import { useStudioSession, studioUsers } from "./useStudioSession";
 import { StudioEditStatus } from "./StudioEditStatus";
+import { PageBackedImport } from "./PageBackedImport";
 import { Workspace } from "./workspace";
 import { Badge, Button, Dialog } from "./ui";
 import "./styles.css";
@@ -663,58 +664,46 @@ function App() {
           onSamples={useSamples}
         />
       )}
-      {newItem && session.canEdit && (
+      {newItem === "group" && session.canEdit && (
         <CreateItem
           pending={session.pending}
           error={session.error}
-          group={
-            newItem === "group"
-              ? null
-              : data.groups.find((g) => g.id === newItem)!
-          }
+          group={null}
           onClose={() => setNewItem(null)}
           onCreate={async (name, description) => {
-            const id = crypto.randomUUID();
-            if (newItem === "group") {
-              if (
-                !(await safeCommit({
-                  ...data,
-                  groups: [
-                    ...data.groups,
-                    { id, name, description, color: "#6772ff" },
-                  ],
-                }))
-              )
-                return;
-            } else {
-              const a: Agent = {
-                id,
-                name,
-                description,
-                groupId: newItem,
-                role: "worker",
-                scope: "Question-driven",
-                instructions: description,
-                files: { "SKILL.md": `# ${name}\n\n${description}` },
-                prompts: [
+            if (
+              await safeCommit({
+                ...data,
+                groups: [
+                  ...data.groups,
                   {
                     id: crypto.randomUUID(),
-                    name: "System instructions",
-                    purpose: "Define this worker’s behavior.",
-                    content: `You are ${name}.\n\nTask: {{question}}\nScope: {{scope}}`,
+                    name,
+                    description,
+                    color: "#6772ff",
                   },
                 ],
-                modelIds: data.models
-                  .filter((m) => m.kind === "Language model")
-                  .slice(0, 1)
-                  .map((m) => m.id),
-                origin: "Local draft",
-              };
-              if (!(await safeCommit({ ...data, agents: [...data.agents, a] })))
-                return;
-              setSelected(id);
-            }
-            setNewItem(null);
+              })
+            )
+              setNewItem(null);
+          }}
+        />
+      )}
+      {newItem && newItem !== "group" && session.canEdit && (
+        <PageBackedImport
+          key={newItem + session.lock?.id}
+          group={data.groups.find((g) => g.id === newItem)!}
+          existingAgents={data.agents}
+          onClose={() => setNewItem(null)}
+          onActivate={async (agent) => {
+            if (
+              data.agents.some(
+                (item) =>
+                  item.pageBinding?.pageKey === agent.pageBinding?.pageKey,
+              )
+            )
+              throw Error("This page already has a sub-agent.");
+            await commit({ ...data, agents: [...data.agents, agent] });
           }}
         />
       )}

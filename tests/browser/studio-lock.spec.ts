@@ -289,3 +289,126 @@ test("models are admin-only and example selections remain temporary", async ({
     page.getByRole("tab", { name: "Models", exact: true }),
   ).toBeVisible();
 });
+
+test("page import validates keys and packages, activates privately, and prevents duplicates", async ({
+  page,
+  context,
+}) => {
+  const apiRequests: string[] = [];
+  context.on("request", (request) => {
+    if (new URL(request.url()).pathname.startsWith("/api/"))
+      apiRequests.push(request.url());
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Edit mode", exact: true }).click();
+  await page
+    .getByRole("button", { name: /Open Distribution Strategist/ })
+    .click();
+  await page
+    .getByRole("button", { name: "Add sub-agent", exact: true })
+    .click();
+  await page.getByLabel("pageKey", { exact: true }).fill("unknown_page");
+  await page
+    .getByRole("button", { name: "Generate from page", exact: true })
+    .click();
+  await expect(page.getByRole("alert")).toContainText("Page not found");
+  await page.getByRole("button", { name: /p_brand_growth/ }).click();
+  await page
+    .getByRole("button", { name: "Generate from page", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Brand Growth Analysis", exact: true }),
+  ).toBeVisible();
+  await editor(page).fill("");
+  await page.getByRole("button", { name: "Save file(s)", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("SKILL.md");
+  await expect(
+    page.getByRole("button", {
+      name: "Next: Planner package",
+      exact: true,
+    }),
+  ).toBeDisabled();
+  await editor(page).fill("# Customized brand growth");
+  await page.getByRole("button", { name: "Save file(s)", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Next: Planner package", exact: true })
+    .click();
+  await expect(editor(page)).toHaveValue(/# Planner selection:/);
+  await editor(page).fill("# Plan approved brand growth requests");
+  await page.getByRole("button", { name: "Save file(s)", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Activate sub-agent", exact: true })
+    .click();
+  await expect(
+    page.getByText("Sub-agent activated in your edit session", { exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Done", exact: true }).click();
+  await expect(page.locator(".subagent-card")).toHaveCount(2);
+  const observer = await context.newPage();
+  await observer.goto("/");
+  await switchTo(observer, "user-b");
+  await observer
+    .getByRole("button", { name: /Open Distribution Strategist/ })
+    .click();
+  await expect(observer.locator(".subagent-card")).toHaveCount(1);
+  await page
+    .locator(".subagent-card")
+    .filter({ hasText: "Brand Growth Analysis" })
+    .click();
+  await expect(editor(page)).toHaveValue("# Customized brand growth");
+  await expect(
+    page.getByRole("tab", { name: /Worker Definitions/ }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: "Close dialog" }).click();
+  await page
+    .getByRole("button", { name: "Add sub-agent", exact: true })
+    .click();
+  await page.getByLabel("pageKey", { exact: true }).fill("p_brand_growth");
+  await page
+    .getByRole("button", { name: "Generate from page", exact: true })
+    .click();
+  await expect(page.getByRole("alert")).toContainText("already bound");
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Exit edit mode", exact: true })
+    .click();
+  await expect(observer.locator(".subagent-card")).toHaveCount(2);
+  await page.reload();
+  await page
+    .getByRole("button", { name: /Open Distribution Strategist/ })
+    .click();
+  await expect(page.locator(".subagent-card")).toHaveCount(2);
+  expect(apiRequests).toEqual([]);
+});
+
+test("canceling a generated import does not create a card", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Edit mode", exact: true }).click();
+  await page
+    .getByRole("button", { name: /Open Distribution Strategist/ })
+    .click();
+  await page
+    .getByRole("button", { name: "Add sub-agent", exact: true })
+    .click();
+  await page.getByLabel("pageKey", { exact: true }).fill("p_market_segments");
+  await page
+    .getByRole("button", { name: "Generate from page", exact: true })
+    .click();
+  page.once("dialog", (dialog) => dialog.dismiss());
+  await page
+    .getByRole("button", { name: "Cancel import", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", {
+      name: "Next: Planner package",
+      exact: true,
+    }),
+  ).toBeVisible();
+  page.once("dialog", (dialog) => dialog.accept());
+  await page
+    .getByRole("button", { name: "Cancel import", exact: true })
+    .click();
+  await expect(page.locator(".subagent-card")).toHaveCount(1);
+});
