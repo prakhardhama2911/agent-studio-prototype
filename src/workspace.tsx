@@ -38,31 +38,69 @@ const tabs = [
   { name: "Skills", icon: FolderOpen },
   { name: "Prompts", icon: FileText },
   { name: "Worker Definitions", icon: Network },
+  { name: "Models", icon: Boxes },
 ];
 export function Workspace({
+  userRole,
+  editable,
+  revision,
+  sessionBusy,
+  lockStatus,
+  lockError,
+  onExitEditMode,
   data,
   source,
   agentId,
   onClose,
   onSave,
 }: {
+  userRole: string;
+  editable: boolean;
+  revision: number;
+  sessionBusy: boolean;
+  lockError: string;
+  lockStatus: (exit?: () => void) => React.ReactNode;
+  onExitEditMode?: () => void;
   data: StudioData;
   source: StudioData;
   agentId: string;
   onClose: () => void;
-  onSave: (d: StudioData) => void;
+  onSave: (d: StudioData, revision: number) => Promise<number>;
 }) {
   const [draft, setDraft] = useState(() => structuredClone(data));
   const [saved, setSaved] = useState(() => JSON.stringify(data));
+  const [savedRevision, setSavedRevision] = useState(revision);
+  useEffect(() => {
+    if (!editable) {
+      setDraft(structuredClone(data));
+      setSaved(JSON.stringify(data));
+      setSavedRevision(revision);
+    }
+  }, [data, revision, editable]);
   const [tab, setTab] = useState("Skills");
+  const [selectedModel, setSelectedModel] = useState("");
+  const canViewModels = userRole === "Admin" || userRole === "SuperAdmin";
+  useEffect(() => {
+    if (!canViewModels) {
+      setSelectedModel("");
+      if (tab === "Models") {
+        setTab("Skills");
+        document.getElementById("tab-Skills")?.focus();
+      }
+    }
+  }, [canViewModels, tab]);
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
   const agent = draft.agents.find((a) => a.id === agentId)!;
   const visibleTabs = tabs.filter(
-    (item) => agent.role !== "worker" || item.name !== "Worker Definitions",
+    (item) =>
+      (agent.role !== "worker" || item.name !== "Worker Definitions") &&
+      (item.name !== "Models" || canViewModels),
   );
   const dirty = JSON.stringify(draft) !== saved;
   const updateAgent = (patch: Partial<Agent>) =>
+    editable &&
+    !sessionBusy &&
     setDraft((d) => ({
       ...d,
       agents: d.agents.map((a) => (a.id === agentId ? { ...a, ...patch } : a)),
@@ -75,10 +113,12 @@ export function Workspace({
     return () => window.removeEventListener("beforeunload", prevent);
   }, [dirty]);
   const close = () => {
+    if (sessionBusy) return;
     if (!dirty || confirm("Discard unsaved changes and close this workspace?"))
       onClose();
   };
-  const save = () => {
+  const save = async () => {
+    if (!editable || sessionBusy) return;
     try {
       for (const a of draft.agents) {
         for (const [p, c] of Object.entries({
@@ -124,11 +164,12 @@ export function Workspace({
           a.id === agentId ? { ...a, origin: "Local draft" as const } : a,
         ),
       };
-      onSave(next);
+      const nextRevision = await onSave(next, savedRevision);
+      setSavedRevision(nextRevision);
       setDraft(next);
       setSaved(JSON.stringify(next));
       setError("");
-      setStatus("Changes saved");
+      setStatus("Saved privately until you exit edit mode");
     } catch (e) {
       setError((e as Error).message);
     }
@@ -142,9 +183,7 @@ export function Workspace({
           ? agent.role === "worker"
             ? draft.workers.filter((w) => w.agentId === agent.id).length
             : Object.keys(agent.workerFiles ?? defaultWorkerFiles).length
-          : name === "Models"
-            ? agent.modelIds.length
-            : null;
+          : null;
   return (
     <Dialog
       title={agent.name}
@@ -173,6 +212,21 @@ export function Workspace({
         </div>
         <span className="workspace-id">{agent.id}</span>
       </div>
+      {lockStatus(() => {
+        if (
+          !sessionBusy &&
+          (!dirty ||
+            confirm(
+              "Discard unsaved changes and exit edit mode? Your last saved changes will become visible to everyone.",
+            ))
+        )
+          onExitEditMode?.();
+      })}
+      {lockError && (
+        <div className="alert" role="alert">
+          {lockError}
+        </div>
+      )}
       <div className="tabs" role="tablist" aria-label="Agent configuration">
         {visibleTabs.map(({ name, icon: Icon }) => (
           <button
@@ -221,8 +275,37 @@ export function Workspace({
             {error}
           </div>
         )}
+        {tab === "Models" && canViewModels && (
+          <section className="studio-model-picker">
+            <div className="section-title">
+              <div>
+                <h3>Models</h3>
+                <p>Select an example model for this agent.</p>
+              </div>
+            </div>
+            <label>
+              Model
+              <select
+                aria-label="Model"
+                value={selectedModel}
+                onChange={(event) => setSelectedModel(event.target.value)}
+                disabled={!editable || sessionBusy}
+              >
+                <option value="">Select a model</option>
+                <option value="example-a">Example model A</option>
+                <option value="example-b">Example model B</option>
+                <option value="example-c">Example model C</option>
+              </select>
+            </label>
+            <p className="field-help">
+              These are example options. Selection is temporary, is not saved,
+              and does not change the running agent.
+            </p>
+          </section>
+        )}
         {tab === "Skills" && (
           <SkillPackageEditor
+            readOnly={!editable || sessionBusy}
             downloadable
             downloadPrefix={agent.id}
             files={agent.files}
@@ -233,6 +316,7 @@ export function Workspace({
         )}
         {tab === "Prompts" && (
           <PromptEditor
+            readOnly={!editable || sessionBusy}
             prompts={agent.prompts}
             onChange={(prompts) => updateAgent({ prompts })}
             role={agent.role}
@@ -241,6 +325,7 @@ export function Workspace({
         )}
         {tab === "Worker Definitions" && agent.role === "planner" && (
           <WorkerRegistryViewer
+            readOnly={!editable || sessionBusy}
             files={agent.workerFiles ?? defaultWorkerFiles}
             onChange={(workerFiles) => updateAgent({ workerFiles })}
             setError={setError}
@@ -250,7 +335,11 @@ export function Workspace({
       <footer className="workspace-footer">
         <span className={dirty ? "dirty-indicator" : "saved-indicator"}>
           {dirty ? <span className="status-dot" /> : <ShieldCheck size={15} />}{" "}
-          {dirty ? "Unsaved changes" : status || "All changes saved"}
+          {!editable
+            ? "Latest development version ? Read only"
+            : dirty
+              ? "Unsaved changes"
+              : status || "No unsaved changes"}
         </span>
         <div>
           <Button
@@ -261,11 +350,15 @@ export function Workspace({
                 setStatus("Changes discarded");
               }
             }}
-            disabled={!dirty}
+            disabled={!editable || sessionBusy || !dirty}
           >
             Discard changes
           </Button>
-          <Button primary onClick={save} disabled={!dirty}>
+          <Button
+            primary
+            onClick={save}
+            disabled={!editable || sessionBusy || !dirty}
+          >
             <Save size={15} />
             Save changes
           </Button>
@@ -275,11 +368,13 @@ export function Workspace({
   );
 }
 function PromptEditor({
+  readOnly,
   prompts,
   onChange,
   role,
   source,
 }: {
+  readOnly: boolean;
   prompts: Prompt[];
   onChange: (p: Prompt[]) => void;
   role: string;
@@ -305,6 +400,7 @@ function PromptEditor({
           <p>Shape how this {role} interprets context and responds.</p>
         </div>
         <Button
+          disabled={readOnly}
           onClick={() => {
             const next = {
               id: crypto.randomUUID(),
@@ -353,6 +449,7 @@ function PromptEditor({
               <label>
                 Prompt name
                 <input
+                  readOnly={readOnly}
                   value={p.name}
                   onChange={(e) => patch({ name: e.target.value })}
                 />
@@ -360,6 +457,7 @@ function PromptEditor({
               <label>
                 Purpose
                 <input
+                  readOnly={readOnly}
                   value={p.purpose}
                   onChange={(e) => patch({ purpose: e.target.value })}
                 />
@@ -392,6 +490,7 @@ function PromptEditor({
                   Preview
                 </button>
                 <button
+                  disabled={readOnly}
                   aria-label="Remove prompt"
                   onClick={() => {
                     if (confirm("Remove this prompt?")) {
@@ -414,6 +513,7 @@ function PromptEditor({
             ) : (
               <textarea
                 className="prompt-code"
+                readOnly={readOnly}
                 aria-label="Prompt content"
                 value={p.content}
                 onChange={(e) => patch({ content: e.target.value })}

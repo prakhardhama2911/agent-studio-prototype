@@ -22,7 +22,7 @@ test('group cards lead to sub-agent cards, retain search and return to the group
  await expect(page.getByRole('heading',{level:2,name:'Distribution Strategist',exact:true})).toBeVisible();
  await page.locator('.subagent-card').filter({hasText:'PQA Analysis'}).click();
  await expect(page.getByRole('heading',{level:2,name:'PQA Analysis',exact:true})).toBeVisible();
- await expect(page.getByRole('tab',{name:/Models/})).toHaveCount(0);
+ await expect(page.getByRole('tab',{name:/Models/})).toHaveCount(1);
  await page.getByRole('button',{name:'Close dialog',exact:true}).click();
  await expect(page.locator('.subagent-card')).toHaveCount(1);
  await page.getByRole('textbox',{name:'Search sub-agents'}).fill('unknown');await expect(page.getByText('No matching sub-agents')).toBeVisible();
@@ -33,7 +33,7 @@ test('group cards lead to sub-agent cards, retain search and return to the group
  await page.screenshot({path:'artifacts/group-catalog.png',fullPage:true});
 });
 test('group management, adding agents, empty groups and mobile layout work inside the group',async({page})=>{
- await page.goto('/');await page.getByRole('button',{name:'Create group',exact:true}).click();
+ await page.goto('/');await page.getByRole('button',{name:'Edit mode',exact:true}).click();await page.getByRole('button',{name:'Create group',exact:true}).click();
  await page.getByLabel('Name',{exact:true}).fill('New Analysis Group');await page.getByLabel('Description',{exact:true}).fill('A group for additional analyses.');await page.getByRole('button',{name:'Create group',exact:true}).last().click();
  await page.getByRole('button',{name:/Open New Analysis Group, 0 sub-agents/}).click();await expect(page.getByText('No sub-agents yet')).toBeVisible();
  await page.getByRole('button',{name:'Add sub-agent',exact:true}).first().click();await page.getByLabel('Name',{exact:true}).fill('New Analyst');await page.getByLabel('Description',{exact:true}).fill('Answers new analysis questions.');await page.getByRole('button',{name:'Create sub-agent',exact:true}).click();

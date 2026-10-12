@@ -4,11 +4,13 @@ import { SourceLine } from "./SourceLine";
 /** The source layer defines the canvas size; the native input keeps selection,
  * keyboard editing, undo, and accessibility while both share one scroll area. */
 export function SkillCodeEditor({
+  readOnly = false,
   path,
   content,
   onChange,
   wrap,
 }: {
+  readOnly?: boolean;
   path: string;
   content: string;
   onChange: (content: string) => void;
@@ -34,6 +36,7 @@ export function SkillCodeEditor({
           ))}
         </div>
         <textarea
+          readOnly={readOnly}
           className="skills-text-input"
           aria-label={`Edit ${path}`}
           spellCheck={false}

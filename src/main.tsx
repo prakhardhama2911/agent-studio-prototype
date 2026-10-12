@@ -40,6 +40,8 @@ import {
   saveDraft,
 } from "./lib/core.mjs";
 import { readApi } from "./lib/api";
+import { useStudioSession, studioUsers } from "./useStudioSession";
+import { StudioEditStatus } from "./StudioEditStatus";
 import { Workspace } from "./workspace";
 import { Badge, Button, Dialog } from "./ui";
 import "./styles.css";
@@ -72,34 +74,48 @@ function App() {
   const [groupId, setGroupId] = useState<string | null>(null);
   const [help, setHelp] = useState(false);
   const input = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-    try {
-      const draft = loadDraft(localStorage, sampleKey);
-      if (draft) setData(hydrateSampleSkills(draft));
-    } catch {
-      setError(
-        "Saved browser data could not be loaded. You can use the example catalog and export your work.",
-      );
-    }
-  }, []);
+  const session = useStudioSession(storageKey, data, setData);
+  const enterEditMode = () => {
+    void session.begin().catch(() => {});
+  };
+  const exitEditMode = () => {
+    void session
+      .finish()
+      .then(() =>
+        setNotice("Saved changes are now visible. Agent Studio is unlocked."),
+      )
+      .catch(() => {});
+  };
+  const lockStatus = (exit = exitEditMode) => (
+    <StudioEditStatus
+      owner={session.lock?.ownerName}
+      mine={session.canEdit}
+      pending={session.pending}
+      ready={session.ready}
+      startedAt={session.lock?.startedAt}
+      onEnter={enterEditMode}
+      onExit={exit}
+    />
+  );
   useEffect(() => {
     if (!notice) return;
     const id = setTimeout(() => setNotice(""), 4500);
     return () => clearTimeout(id);
   }, [notice]);
-  const commit = (next: StudioData) => {
-    saveDraft(localStorage, storageKey, next);
-    setData(next);
-    setNotice("Changes saved");
+  const commit = async (next: StudioData, expectedRevision?: number) => {
+    const revision = await session.save(next, expectedRevision);
+    setNotice(
+      "Changes saved privately. Exit edit mode to make them visible to everyone.",
+    );
+    return revision;
   };
-  const safeCommit = (next: StudioData) => {
+  const safeCommit = async (next: StudioData) => {
     try {
-      commit(next);
-    } catch {
-      setError(
-        "Browser storage is unavailable or full. Export your changes before leaving.",
-      );
-      setData(next);
+      await commit(next);
+      return true;
+    } catch (e) {
+      setError((e as Error).message);
+      return false;
     }
   };
   const useSamples = () => {
@@ -337,16 +353,50 @@ function App() {
                 </strong>
               </div>
             </div>
-            <Button primary onClick={() => setNewItem("group")}>
+            <Button
+              primary
+              disabled={!session.canEdit || session.pending}
+              onClick={() => setNewItem("group")}
+            >
               <Plus size={17} />
               Create group
             </Button>
           </div>
         </header>
+        {lockStatus()}
+        <details className="studio-demo-controls">
+          <summary>Try the multi-user workflow</summary>
+          <label>
+            View as{" "}
+            <select
+              aria-label="View as user"
+              value={session.user.id}
+              disabled={session.pending}
+              onChange={(e) => session.switchUser(e.target.value)}
+            >
+              {studioUsers.map((user) => (
+                <option key={user.id} value={user.id}>
+                  {user.name} ({user.role})
+                </option>
+              ))}
+            </select>
+          </label>
+          <p>
+            Users and locking are simulated in this browser. Tabs share the lock
+            and latest development data; separate browsers are not connected.
+            Return as the lock owner to resume or unlock after closing a tab.
+          </p>
+        </details>
+        {session.error && (
+          <div className="alert" role="alert">
+            {session.error}
+          </div>
+        )}
         <section className="catalog">
           {activeGroup ? (
             <GroupDetail
               key={activeGroup.id}
+              editable={session.canEdit && !session.pending}
               group={activeGroup}
               agents={agents.filter(
                 (a) => a.role === "worker" && a.groupId === activeGroup.id,
@@ -584,7 +634,18 @@ function App() {
       />
       {selectedAgent && (
         <Workspace
-          key={selectedAgent.id}
+          key={
+            selectedAgent.id +
+            session.user.id +
+            (session.canEdit ? session.lock?.id : "view")
+          }
+          userRole={session.user.role}
+          editable={session.canEdit}
+          sessionBusy={session.pending}
+          lockError={session.error}
+          revision={session.revision}
+          lockStatus={lockStatus}
+          onExitEditMode={session.canEdit ? exitEditMode : undefined}
           data={data}
           agentId={selectedAgent.id}
           source={base}
@@ -602,24 +663,29 @@ function App() {
           onSamples={useSamples}
         />
       )}
-      {newItem && (
+      {newItem && session.canEdit && (
         <CreateItem
+          pending={session.pending}
+          error={session.error}
           group={
             newItem === "group"
               ? null
               : data.groups.find((g) => g.id === newItem)!
           }
           onClose={() => setNewItem(null)}
-          onCreate={(name, description) => {
+          onCreate={async (name, description) => {
             const id = crypto.randomUUID();
             if (newItem === "group") {
-              safeCommit({
-                ...data,
-                groups: [
-                  ...data.groups,
-                  { id, name, description, color: "#6772ff" },
-                ],
-              });
+              if (
+                !(await safeCommit({
+                  ...data,
+                  groups: [
+                    ...data.groups,
+                    { id, name, description, color: "#6772ff" },
+                  ],
+                }))
+              )
+                return;
             } else {
               const a: Agent = {
                 id,
@@ -644,24 +710,30 @@ function App() {
                   .map((m) => m.id),
                 origin: "Local draft",
               };
-              safeCommit({ ...data, agents: [...data.agents, a] });
+              if (!(await safeCommit({ ...data, agents: [...data.agents, a] })))
+                return;
               setSelected(id);
             }
             setNewItem(null);
           }}
         />
       )}
-      {manage && (
+      {manage && session.canEdit && (
         <ManageGroup
+          pending={session.pending}
+          error={session.error}
           group={data.groups.find((g) => g.id === manage)!}
           onClose={() => setManage(null)}
-          onSave={(name, description) => {
-            safeCommit({
-              ...data,
-              groups: data.groups.map((g) =>
-                g.id === manage ? { ...g, name, description } : g,
-              ),
-            });
+          onSave={async (name, description) => {
+            if (
+              !(await safeCommit({
+                ...data,
+                groups: data.groups.map((g) =>
+                  g.id === manage ? { ...g, name, description } : g,
+                ),
+              }))
+            )
+              return;
             setManage(null);
           }}
         />
@@ -718,6 +790,7 @@ function App() {
   );
 }
 function GroupDetail({
+  editable,
   group,
   agents,
   onBack,
@@ -725,6 +798,7 @@ function GroupDetail({
   onManage,
   onAdd,
 }: {
+  editable: boolean;
   group: Group;
   agents: Agent[];
   onBack: () => void;
@@ -758,8 +832,10 @@ function GroupDetail({
           </span>
         </div>
         <div className="group-detail-actions">
-          <Button onClick={onManage}>Manage group</Button>
-          <Button primary onClick={onAdd}>
+          <Button disabled={!editable} onClick={onManage}>
+            Manage group
+          </Button>
+          <Button primary disabled={!editable} onClick={onAdd}>
             <Plus size={16} />
             Add sub-agent
           </Button>
@@ -834,7 +910,7 @@ function GroupDetail({
           {agents.length ? (
             <Button onClick={() => setQuery("")}>Clear search</Button>
           ) : (
-            <Button primary onClick={onAdd}>
+            <Button primary disabled={!editable} onClick={onAdd}>
               Add sub-agent
             </Button>
           )}
@@ -914,10 +990,14 @@ function Connection({
   );
 }
 function CreateItem({
+  pending,
+  error,
   group,
   onClose,
   onCreate,
 }: {
+  pending: boolean;
+  error: string;
   group: Group | null;
   onClose: () => void;
   onCreate: (n: string, d: string) => void;
@@ -928,9 +1008,16 @@ function CreateItem({
     <Dialog
       title={group ? "Add sub-agent" : "Create analysis group"}
       eyebrow={group ? group.name : "ANALYSIS CATALOG"}
-      onClose={onClose}
+      onClose={() => {
+        if (!pending) onClose();
+      }}
     >
       <div className="dialog-body">
+        {error && (
+          <div role="alert" className="alert">
+            {error}
+          </div>
+        )}
         <label>
           Name
           <input
@@ -958,7 +1045,7 @@ function CreateItem({
         <Button onClick={onClose}>Cancel</Button>
         <Button
           primary
-          disabled={!name.trim() || !description.trim()}
+          disabled={pending || !name.trim() || !description.trim()}
           onClick={() => onCreate(name.trim(), description.trim())}
         >
           <Plus size={15} />
@@ -969,10 +1056,14 @@ function CreateItem({
   );
 }
 function ManageGroup({
+  pending,
+  error,
   group,
   onClose,
   onSave,
 }: {
+  pending: boolean;
+  error: string;
   group: Group;
   onClose: () => void;
   onSave: (n: string, d: string) => void;
@@ -980,8 +1071,19 @@ function ManageGroup({
   const [name, setName] = useState(group.name),
     [description, setDescription] = useState(group.description);
   return (
-    <Dialog title="Manage group" eyebrow="PRESENTATION GROUP" onClose={onClose}>
+    <Dialog
+      title="Manage group"
+      eyebrow="PRESENTATION GROUP"
+      onClose={() => {
+        if (!pending) onClose();
+      }}
+    >
       <div className="dialog-body">
+        {error && (
+          <div role="alert" className="alert">
+            {error}
+          </div>
+        )}
         <label>
           Name
           <input value={name} onChange={(e) => setName(e.target.value)} />
@@ -1003,7 +1105,7 @@ function ManageGroup({
         <Button onClick={onClose}>Cancel</Button>
         <Button
           primary
-          disabled={!name.trim()}
+          disabled={pending || !name.trim()}
           onClick={() => onSave(name.trim(), description.trim())}
         >
           Save changes

@@ -23,3 +23,11 @@ git push origin main
 Every push to main triggers deployment. You can also use Actions > Deploy Agent Studio to GitHub Pages > Run workflow.
 
 The hosted app uses bundled data and browser storage. Save changes does not commit to GitHub or change other visitors' data. Shared updates must be made in source and pushed. Existing saved browser drafts can override updated seed data. GitHub Pages does not run the optional local backend proxy. The published JavaScript includes the bundled skill, prompt, and worker-definition contents.
+
+### Studio-wide Edit mode
+
+The catalog and workspaces start read-only. **Edit mode** reserves the whole studio for the displayed user. **Save changes** saves privately; **Exit edit mode** exposes the last saved catalog and releases the lock. Unsaved workspace edits require confirmation before exiting. Closing the workspace or refreshing does not release a lock; return as its owner to resume or exit.
+
+Use **Try the multi-user workflow → View as** to switch between Prakhar, User B and User C. To compare side by side, open two tabs in the same browser and origin, select different users, edit/save in the owner's tab, and verify that the other tab changes only after exit. File downloads and previews remain available in view mode.
+
+This is a browser-only demonstration, not an authorization boundary. Local storage holds an atomic envelope containing the visible catalog, lock and private saved catalog; Web Locks serialize writes between tabs. It requires HTTPS or localhost with Web Locks support. Existing catalog data is copied on the first lock operation without overwriting the legacy storage entry. Separate browsers/devices do not share this state. Production requires authenticated server-owned lock acquisition, ownership validation, persistence and release operations.

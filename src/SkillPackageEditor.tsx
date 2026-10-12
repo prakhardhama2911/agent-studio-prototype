@@ -23,6 +23,7 @@ import {
 import { validateFile, validatePath } from "./lib/core.mjs";
 import { SkillCodeEditor } from "./SkillCodeEditor";
 export function SkillPackageEditor({
+  readOnly = false,
   files,
   onChange,
   source,
@@ -31,6 +32,7 @@ export function SkillPackageEditor({
   downloadPrefix = "planner",
   setError,
 }: {
+  readOnly?: boolean;
   files: Record<string, string>;
   onChange: (f: Record<string, string>) => void;
   source: string;
@@ -87,6 +89,7 @@ export function SkillPackageEditor({
     folderInput.current?.setAttribute("webkitdirectory", "");
   }, []);
   const add = () => {
+    if (readOnly) return;
     const p = newPath.trim().replaceAll("\\", "/").replace(/\/$/, "");
     if (adding === "folder") {
       if (
@@ -125,7 +128,7 @@ export function SkillPackageEditor({
     setError("");
   };
   const importFiles = async (list: FileList | null) => {
-    if (!list) return;
+    if (readOnly || !list) return;
     const next = { ...files };
     let first = "";
     try {
@@ -247,6 +250,7 @@ export function SkillPackageEditor({
             )}
             <button
               title="Add file"
+              disabled={readOnly}
               aria-label="Add file"
               onClick={() => {
                 setAdding("file");
@@ -257,6 +261,7 @@ export function SkillPackageEditor({
             </button>
             <button
               title="Add folder"
+              disabled={readOnly}
               aria-label="Add folder"
               onClick={() => {
                 setAdding("folder");
@@ -267,6 +272,7 @@ export function SkillPackageEditor({
             </button>
             <button
               title="Import files"
+              disabled={readOnly}
               aria-label="Import files"
               onClick={() => fileInput.current?.click()}
             >
@@ -274,6 +280,7 @@ export function SkillPackageEditor({
             </button>
             <button
               title="Import folder"
+              disabled={readOnly}
               aria-label="Import folder"
               onClick={() => folderInput.current?.click()}
             >
@@ -289,7 +296,7 @@ export function SkillPackageEditor({
               onChange={(e) => setFilter(e.target.value)}
             />
           </div>
-          {adding && (
+          {adding && !readOnly && (
             <div className="add-path">
               <label>
                 {adding === "folder" ? "New folder" : "New file"}
@@ -421,7 +428,7 @@ export function SkillPackageEditor({
                 onClick={() => setPreview(false)}
               >
                 <Code2 size={13} />
-                Edit
+                {readOnly ? "Source" : "Edit"}
               </button>
               <button
                 className={preview ? "active" : ""}
@@ -461,6 +468,7 @@ export function SkillPackageEditor({
               )}
               {path && (
                 <button
+                  disabled={readOnly}
                   aria-label="Delete selected file"
                   title="Delete selected file"
                   onClick={() => {
@@ -494,6 +502,7 @@ export function SkillPackageEditor({
                 </div>
               ) : (
                 <SkillCodeEditor
+                  readOnly={readOnly}
                   key={path}
                   path={path}
                   content={files[path]}
